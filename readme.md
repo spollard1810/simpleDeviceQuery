@@ -13,6 +13,39 @@ A Python-based GUI application for bulk querying Cisco network devices and colle
 - Custom command support
 - Batch output files with device-specific prefixes
 
+### Supported Commands
+
+#### Interface Information
+- Show Interfaces Status
+- Show IP Interface Brief
+- Show Interface Errors
+- Show Interface Counters
+- Show Interface Description
+
+#### Layer 2 Information
+- Show VLAN Brief
+- Show MAC Address-Table
+- Show Spanning Tree Status
+- Show Port-Security Summary
+
+#### Network Information
+- Show CDP Neighbors Detail
+- Show IP ARP
+
+#### System Information
+- Show Inventory
+- Show Version
+- Show Running Config
+- Show Environment
+- Show Logging
+- Show Tech-Support
+
+All commands support structured output parsing and CSV export, with the following features:
+- Automatic error detection and handling
+- Consistent CSV formatting
+- Device-specific prefixing
+- Batch processing support
+
 ## Application Structure
 
 ### Core Classes
@@ -99,6 +132,7 @@ All outputs are saved in the `outputs` directory:
 - Status reports: `{PREFIX}_devicelist_status_report.csv`
 - Command outputs: `{PREFIX}_command_name_all_devices.csv`
 - Custom command outputs: `{PREFIX}_command_output_{command}.csv`
+- Error logs: `{PREFIX}_error_log.txt`
 
 Where `{PREFIX}` is automatically generated from the first device's hostname.
 

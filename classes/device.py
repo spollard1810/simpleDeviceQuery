@@ -143,15 +143,35 @@ class Device:
             self._connection = None
 
     def execute_command(self, command: str) -> str:
-        """Execute command on device and return output"""
+        """Execute command with error handling"""
         if not self.connection_status or not self._connection:
             raise ConnectionError(f"Device {self.hostname} is not connected")
         
         try:
-            return self._connection.send_command(command)
+            # Add timeout for commands that might hang
+            output = self._connection.send_command(
+                command,
+                read_timeout=60,
+                expect_string=r'[>#]'
+            )
+            
+            # Check for common error messages
+            error_patterns = [
+                r'Invalid input',
+                r'Incomplete command',
+                r'Error:',
+                r'% Error'
+            ]
+            
+            for pattern in error_patterns:
+                if re.search(pattern, output, re.IGNORECASE):
+                    raise CommandError(f"Command error on {self.hostname}: {output}")
+                
+            return output
+            
         except Exception as e:
             print(f"Command execution failed on {self.hostname}: {str(e)}")
-            return ""
+            raise
 
     async def async_ping(self) -> bool:
         """Asynchronous ping with fast timeout"""
