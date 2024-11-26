@@ -233,15 +233,15 @@ class MainWindow:
                     messagebox.showwarning("Warning", "Please enter a custom command")
                     return
                 parser = None
-                headers = ["Command", "Output"]
+                headers = ["hostname", "command", "output"]  # Added hostname
             else:
                 if selected_command not in COMMON_COMMANDS:
                     messagebox.showwarning("Warning", f"Command '{selected_command}' not found in COMMON_COMMANDS")
                     return
                 command_info = COMMON_COMMANDS[selected_command]
                 command = command_info["command"]
-                parser = command_info["parser"]
-                headers = command_info["headers"]
+                parser = command_info.get("parser")  # Use get() to handle missing parser
+                headers = command_info.get("headers", ["hostname", "command", "output"])  # Default headers if missing
 
             progress = ProgressDialog(
                 self.root,
@@ -277,13 +277,23 @@ class MainWindow:
                         try:
                             if parser:
                                 parsed_data = parser(output)
-                                self.device_manager.export_parsed_output(
-                                    hostname, 
-                                    selected_command, 
-                                    parsed_data,
-                                    headers
-                                )
+                                if isinstance(parsed_data, (list, dict)):
+                                    # Handle both list and dict outputs
+                                    if isinstance(parsed_data, dict):
+                                        parsed_data = [parsed_data]
+                                    # Add hostname to each row
+                                    for row in parsed_data:
+                                        row['hostname'] = hostname
+                                    self.device_manager.export_parsed_output(
+                                        hostname, 
+                                        selected_command, 
+                                        parsed_data,
+                                        headers
+                                    )
+                                else:
+                                    raise ValueError("Parser output must be a list of dictionaries or a dictionary")
                             else:
+                                # For custom commands or commands without parsers
                                 self.device_manager.export_command_output(hostname, command, output)
                             progress.add_message(f"Successfully processed output from {hostname}")
                         except Exception as e:
