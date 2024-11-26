@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional, Dict
 import re
 from netmiko import ConnectHandler
+import platform
+import subprocess
 
 @dataclass
 class Device:
@@ -11,6 +13,7 @@ class Device:
     connection_status: bool = False
     _connection = None
     _device_type: Optional[str] = None
+    is_online: bool = False
 
     DEVICE_TYPE_MAPPING = {
         # Catalyst IOS/IOS-XE Switches
@@ -109,4 +112,26 @@ class Device:
             return self._connection.send_command(command)
         except Exception as e:
             print(f"Command execution failed on {self.hostname}: {str(e)}")
-            return "" 
+            return ""
+
+    def ping(self) -> bool:
+        """Ping the device to check if it's online"""
+        try:
+            # Get the host to ping (prefer IP if available)
+            host = self.ip if self.ip else self.hostname
+            
+            # Determine the ping command based on the operating system
+            param = '-n' if platform.system().lower() == 'windows' else '-c'
+            command = ['ping', param, '1', host]
+            
+            # Run the ping command
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Update online status based on ping result
+            self.is_online = result.returncode == 0
+            return self.is_online
+            
+        except Exception as e:
+            print(f"Ping failed for {self.hostname}: {str(e)}")
+            self.is_online = False
+            return False 

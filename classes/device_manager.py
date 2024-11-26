@@ -48,6 +48,9 @@ class DeviceManager:
                         model_id=model_id
                     )
                     
+                    # Ping device to check availability
+                    device.ping()
+                    
                     # Detect device type immediately and store it
                     device._device_type = device.detect_device_type()
                     print(f"Detected device type for {device.hostname}: {device._device_type}")

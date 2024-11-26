@@ -100,7 +100,13 @@ class MainWindow:
     def update_device_list(self):
         self.device_list.delete(*self.device_list.get_children())
         for hostname, device in self.device_manager.devices.items():
-            status = "Connected" if device.connection_status else "Disconnected"
+            if device.connection_status:
+                status = "Connected"
+            elif not device.is_online:
+                status = "Offline"
+            else:
+                status = "Disconnected"
+            
             ip_address = device.ip or "N/A"
             model = device.model_id or "Unknown"
             self.device_list.insert("", tk.END, text=hostname, 
@@ -139,12 +145,18 @@ class MainWindow:
             messagebox.showwarning("Warning", "No devices selected")
             return
         
+        # Check if any selected devices are online
+        online_devices = [d for d in selected_devices if d.is_online]
+        if not online_devices:
+            messagebox.showwarning("Warning", "None of the selected devices are online")
+            return
+        
         progress = ProgressDialog(
             self.root,
             "Connecting to Devices",
-            len(selected_devices)
+            len(selected_devices)  # Keep total count for progress bar
         )
-        progress.update_status(f"Connecting to {len(selected_devices)} devices...")
+        progress.update_status(f"Connecting to {len(online_devices)} devices...")
         progress.start()
         
         def connect_thread():
@@ -172,6 +184,20 @@ class MainWindow:
     def execute_command(self):
         selected_command = self.command_var.get()
         
+        # Get selected devices that are online and connected
+        selected_devices = self.device_manager.get_selected_devices()
+        available_devices = [
+            d for d in selected_devices 
+            if d.is_online and d.connection_status
+        ]
+        
+        if not available_devices:
+            messagebox.showwarning(
+                "Warning", 
+                "No selected devices are both online and connected"
+            )
+            return
+        
         # Handle custom command
         if selected_command == "Custom Command":
             command = self.command_entry.get().strip()
@@ -190,14 +216,9 @@ class MainWindow:
             parser = command_info["parser"]
             headers = command_info["headers"]
 
-        selected_devices = self.device_manager.get_selected_devices()
-        if not selected_devices:
-            messagebox.showwarning("Warning", "No devices selected")
-            return
-
         def execute_thread():
             results = self.connection_manager.execute_command_on_devices(
-                selected_devices, 
+                available_devices, 
                 command
             )
 

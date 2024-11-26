@@ -18,6 +18,14 @@ class ConnectionManager:
             raise ValueError("Credentials not set. Call set_credentials first.")
 
         results = {}
+        online_devices = [device for device in devices if device.is_online]
+        offline_devices = [device for device in devices if not device.is_online]
+
+        # Log offline devices in progress dialog
+        if progress_dialog:
+            for device in offline_devices:
+                progress_dialog.add_message(f"Skipping {device.hostname}: Device is offline")
+                progress_dialog.update_progress()
 
         def connect_single_device(device: Device) -> tuple:
             if progress_dialog:
@@ -32,7 +40,7 @@ class ConnectionManager:
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_device = {
                 executor.submit(connect_single_device, device): device 
-                for device in devices
+                for device in online_devices  # Only attempt to connect to online devices
             }
 
             for future in as_completed(future_to_device):
@@ -41,12 +49,32 @@ class ConnectionManager:
                 if callback:
                     callback()
 
+        # Add offline devices to results with False status
+        for device in offline_devices:
+            results[device.hostname] = False
+
         return results
 
     def execute_command_on_devices(self, devices: List[Device], command: str, 
                                  callback=None) -> Dict[str, str]:
         """Execute command on multiple devices concurrently"""
         results = {}
+        
+        # Filter out offline and disconnected devices
+        available_devices = [
+            device for device in devices 
+            if device.is_online and device.connection_status
+        ]
+        
+        skipped_devices = [
+            device for device in devices 
+            if not device.is_online or not device.connection_status
+        ]
+
+        # Add skipped devices to results
+        for device in skipped_devices:
+            status = "Offline" if not device.is_online else "Not Connected"
+            results[device.hostname] = f"Skipped: Device is {status}"
 
         def execute_single_command(device: Device) -> tuple:
             try:
@@ -58,14 +86,14 @@ class ConnectionManager:
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_device = {
                 executor.submit(execute_single_command, device): device 
-                for device in devices if device.connection_status
+                for device in available_devices
             }
 
             for future in as_completed(future_to_device):
                 hostname, output = future.result()
                 results[hostname] = output
                 if callback:
-                    callback()  # Update GUI if callback provided
+                    callback()
 
         return results
 
