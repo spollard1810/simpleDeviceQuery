@@ -5,12 +5,22 @@ import csv
 import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 class DeviceManager:
     def __init__(self):
         self.devices: Dict[str, Device] = {}  # hostname -> Device mapping
         self.selected_devices: set = set()    # Set of selected hostnames
         self.batch_prefix: str = ""           # Store the prefix for CSV files
+        
+        # Create necessary directories
+        self._create_directories()
+
+    def _create_directories(self) -> None:
+        """Create necessary directories if they don't exist"""
+        os.makedirs('outputs', exist_ok=True)
+        os.makedirs('logs', exist_ok=True)
+
     def _set_batch_prefix(self, first_hostname: str) -> None:
         """Set the batch prefix from the first device hostname"""
         # Take first 3 characters, remove any non-alphanumeric chars, and convert to uppercase
@@ -198,3 +208,23 @@ class DeviceManager:
             if not file_exists:
                 writer.writeheader()
             writer.writerows(parsed_data)
+
+    def _get_log_filename(self, hostname: str) -> str:
+        """Generate log filename for a specific device"""
+        return f"{hostname}_command_history.log"
+
+    def log_command_execution(self, hostname: str, command: str, output: str, status: str = "SUCCESS") -> None:
+        """Log command execution details to device-specific log file"""
+        # Ensure logs directory exists (redundant but safe)
+        os.makedirs('logs', exist_ok=True)
+        log_file = os.path.join('logs', self._get_log_filename(hostname))
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*50}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Status: {status}\n")
+            f.write(f"Command: {command}\n")
+            f.write(f"Output:\n{output}\n")
+            f.write(f"{'='*50}\n")

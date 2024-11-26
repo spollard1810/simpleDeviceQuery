@@ -494,14 +494,14 @@ COMMON_COMMANDS = {
         "headers": ["section", "output"]
     },
     "Show Interface Errors": {
-        "command": "show interfaces | include errors|CRC|collision|abort|reset",
+        "command": "show interfaces | include errors|CRC|collision|abort",
         "parser": CommandParser.parse_interface_errors,
-        "headers": ["interface", "input_errors", "crc_errors", "frame_errors", "overrun", "ignored", "output_errors", "collisions"]
+        "headers": ["interface", "input_errors", "crc_errors", "output_errors", "collisions"]
     },
     "Show Interface Counters": {
-        "command": "show interface counters errors",
+        "command": "show interfaces counters",
         "parser": CommandParser.parse_interface_counters,
-        "headers": ["interface", "input_errors", "crc", "frame", "overrun", "ignored", "output_errors", "collisions"]
+        "headers": ["interface", "inOctets", "inUcastPkts", "outOctets", "outUcastPkts"]
     },
     "Show Spanning Tree Status": {
         "command": "show spanning-tree summary",
@@ -514,12 +514,12 @@ COMMON_COMMANDS = {
         "headers": ["interface", "status", "protocol", "description"]
     },
     "Show IP ARP": {
-        "command": "show ip arp | exclude Incomplete",
+        "command": "show ip arp",
         "parser": CommandParser.parse_ip_arp,
         "headers": ["protocol", "address", "age", "mac_address", "type", "interface"]
     },
     "Show Port-Security Summary": {
-        "command": "show port-security | include Security|Port",
+        "command": "show port-security",
         "parser": CommandParser.parse_port_security,
         "headers": ["interface", "max_addr", "current_addr", "security_violation", "action"]
     }

@@ -209,61 +209,110 @@ class MainWindow:
             self.command_entry.delete(0, tk.END)
 
     def execute_command(self):
-        selected_command = self.command_var.get()
-        
-        # Get selected devices that are online and connected
-        selected_devices = self.device_manager.get_selected_devices()
-        available_devices = [
-            d for d in selected_devices 
-            if d.is_online and d.connection_status
-        ]
-        
-        if not available_devices:
-            messagebox.showwarning(
-                "Warning", 
-                "No selected devices are both online and connected"
-            )
-            return
-        
-        # Handle custom command
-        if selected_command == "Custom Command":
-            command = self.command_entry.get().strip()
-            if not command:
-                messagebox.showwarning("Warning", "Please enter a custom command")
+        try:
+            selected_command = self.command_var.get()
+            
+            # Get selected devices that are online and connected
+            selected_devices = self.device_manager.get_selected_devices()
+            available_devices = [
+                d for d in selected_devices 
+                if d.is_online and d.connection_status
+            ]
+            
+            if not available_devices:
+                messagebox.showwarning(
+                    "Warning", 
+                    "No selected devices are both online and connected"
+                )
                 return
-            parser = None
-            headers = ["Command", "Output"]
-        # Handle predefined command
-        else:
-            if selected_command not in COMMON_COMMANDS:
-                messagebox.showwarning("Warning", "Please select a valid command")
-                return
-            command_info = COMMON_COMMANDS[selected_command]
-            command = command_info["command"]
-            parser = command_info["parser"]
-            headers = command_info["headers"]
+            
+            # Handle custom command vs predefined command
+            if selected_command == "Custom Command":
+                command = self.command_entry.get().strip()
+                if not command:
+                    messagebox.showwarning("Warning", "Please enter a custom command")
+                    return
+                parser = None
+                headers = ["Command", "Output"]
+            else:
+                if selected_command not in COMMON_COMMANDS:
+                    messagebox.showwarning("Warning", f"Command '{selected_command}' not found in COMMON_COMMANDS")
+                    return
+                command_info = COMMON_COMMANDS[selected_command]
+                command = command_info["command"]
+                parser = command_info["parser"]
+                headers = command_info["headers"]
 
-        def execute_thread():
-            results = self.connection_manager.execute_command_on_devices(
-                available_devices, 
-                command
+            progress = ProgressDialog(
+                self.root,
+                f"Executing {selected_command}",
+                len(available_devices)
             )
+            progress.update_status(f"Executing on {len(available_devices)} devices...")
+            progress.start()
 
-            for hostname, output in results.items():
-                if parser:
-                    # Parse and export structured data
-                    parsed_data = parser(output)
-                    self.device_manager.export_parsed_output(
-                        hostname, 
-                        selected_command, 
-                        parsed_data,
-                        headers
+            def execute_thread():
+                try:
+                    results = self.connection_manager.execute_command_on_devices(
+                        available_devices, 
+                        command,
+                        callback=lambda device, status: progress.add_message(f"{device}: {status}")
                     )
-                else:
-                    # Export raw output for custom commands
-                    self.device_manager.export_command_output(hostname, command, output)
 
-            messagebox.showinfo("Success", "Command execution completed")
+                    for hostname, output in results.items():
+                        status = "ERROR" if isinstance(output, str) and ("Error:" in output or "Failed:" in output) else "SUCCESS"
+                        
+                        # Log the command execution
+                        self.device_manager.log_command_execution(
+                            hostname,
+                            command,
+                            output,
+                            status
+                        )
 
-        thread = threading.Thread(target=execute_thread)
-        thread.start()
+                        if status == "ERROR":
+                            progress.add_message(f"Error on {hostname}: {output}")
+                            continue
+                        
+                        try:
+                            if parser:
+                                parsed_data = parser(output)
+                                self.device_manager.export_parsed_output(
+                                    hostname, 
+                                    selected_command, 
+                                    parsed_data,
+                                    headers
+                                )
+                            else:
+                                self.device_manager.export_command_output(hostname, command, output)
+                            progress.add_message(f"Successfully processed output from {hostname}")
+                        except Exception as e:
+                            error_msg = f"Failed to process output from {hostname}: {str(e)}"
+                            progress.add_message(error_msg)
+                            # Log parsing failure
+                            self.device_manager.log_command_execution(
+                                hostname,
+                                command,
+                                error_msg,
+                                "PARSE_ERROR"
+                            )
+                    
+                    self.root.after(0, lambda: messagebox.showinfo("Success", "Command execution completed"))
+                except Exception as e:
+                    error_msg = f"Command execution failed: {str(e)}"
+                    self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
+                    # Log execution failure
+                    for device in available_devices:
+                        self.device_manager.log_command_execution(
+                            device.hostname,
+                            command,
+                            error_msg,
+                            "EXECUTION_ERROR"
+                        )
+                finally:
+                    self.root.after(0, progress.finish)
+
+            thread = threading.Thread(target=execute_thread)
+            thread.start()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to start command execution: {str(e)}")

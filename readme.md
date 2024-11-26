@@ -128,12 +128,22 @@ All commands support structured output parsing and CSV export, with the followin
 
 ## Output Files
 
-All outputs are saved in the `outputs` directory:
-- Status reports: `{PREFIX}_devicelist_status_report.csv`
-- Command outputs: `{PREFIX}_command_name_all_devices.csv`
-- Custom command outputs: `{PREFIX}_command_output_{command}.csv`
-- Error logs: `{PREFIX}_error_log.txt`
+All outputs are saved in the following directories:
+- `outputs/`: Contains all CSV output files
+  - Status reports: `{PREFIX}_devicelist_status_report.csv`
+  - Command outputs: `{PREFIX}_command_name_all_devices.csv`
+  - Custom command outputs: `{PREFIX}_command_output_{command}.csv`
+- `logs/`: Contains device-specific command history
+  - Command logs: `{hostname}_command_history.log`
 
 Where `{PREFIX}` is automatically generated from the first device's hostname.
+
+### Log Format
+Each command execution is logged with:
+- Timestamp
+- Command executed
+- Execution status
+- Command output
+- Any errors encountered
 
 
