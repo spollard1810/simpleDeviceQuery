@@ -12,7 +12,7 @@ class ConnectionManager:
         """Set credentials for all connections"""
         self.connection = Connection(username=username, password=password)
 
-    def connect_devices(self, devices: List[Device], callback=None) -> Dict[str, bool]:
+    def connect_devices(self, devices: List[Device], callback=None, progress_dialog=None) -> Dict[str, bool]:
         """Connect to multiple devices concurrently"""
         if not self.connection:
             raise ValueError("Credentials not set. Call set_credentials first.")
@@ -20,7 +20,13 @@ class ConnectionManager:
         results = {}
 
         def connect_single_device(device: Device) -> tuple:
+            if progress_dialog:
+                progress_dialog.add_message(f"Connecting to {device.hostname}...")
             success = device.connect(self.connection.username, self.connection.password)
+            if progress_dialog:
+                status = "Success" if success else "Failed"
+                progress_dialog.add_message(f"{device.hostname}: Connection {status}")
+                progress_dialog.update_progress()
             return device.hostname, success
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -33,7 +39,7 @@ class ConnectionManager:
                 hostname, success = future.result()
                 results[hostname] = success
                 if callback:
-                    callback()  # Update GUI if callback provided
+                    callback()
 
         return results
 

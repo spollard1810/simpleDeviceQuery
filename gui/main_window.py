@@ -5,6 +5,7 @@ from classes.connection_manager import ConnectionManager
 from typing import Optional
 import threading
 from classes.command_parser import COMMON_COMMANDS
+from gui.progress_dialog import ProgressDialog
 
 class CredentialsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -125,17 +126,34 @@ class MainWindow:
 
         username, password = self.credentials
         self.connection_manager.set_credentials(username, password)
+        
         selected_items = self.device_list.selection()
         selected_devices = [
             self.device_manager.devices[self.device_list.item(item)["text"]]
             for item in selected_items
         ]
         
+        if not selected_devices:
+            messagebox.showwarning("Warning", "No devices selected")
+            return
+        
+        progress = ProgressDialog(
+            self.root,
+            "Connecting to Devices",
+            len(selected_devices)
+        )
+        progress.update_status(f"Connecting to {len(selected_devices)} devices...")
+        progress.start()
+        
         def connect_thread():
-            self.connection_manager.connect_devices(
-                selected_devices, 
-                callback=lambda: self.root.after(0, self.update_device_list)
-            )
+            try:
+                self.connection_manager.connect_devices(
+                    selected_devices,
+                    callback=lambda: self.root.after(0, self.update_device_list),
+                    progress_dialog=progress
+                )
+            finally:
+                self.root.after(0, progress.finish)
 
         thread = threading.Thread(target=connect_thread)
         thread.start()
