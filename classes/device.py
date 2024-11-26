@@ -165,6 +165,7 @@ class Device:
             # Use ThreadPoolExecutor for the blocking socket operation
             with ThreadPoolExecutor() as pool:
                 try:
+                    # Try SSH port first
                     result = await loop.run_in_executor(
                         pool,
                         self._check_host_port,
@@ -172,10 +173,21 @@ class Device:
                         22,  # Check SSH port
                         self.PING_TIMEOUT
                     )
+                    if result:
+                        self.is_online = True
+                        return True
+                        
+                    # If SSH fails, try ICMP ping
+                    result = await loop.run_in_executor(
+                        pool,
+                        self._icmp_ping,
+                        host
+                    )
                     self.is_online = result
                     return result
+                    
                 except (socket.timeout, socket.error, ConnectionRefusedError):
-                    # Try ICMP ping as fallback
+                    # Try ICMP ping as final fallback
                     result = await loop.run_in_executor(
                         pool,
                         self._icmp_ping,
@@ -201,15 +213,19 @@ class Device:
         try:
             param = '-n' if platform.system().lower() == 'windows' else '-c'
             timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
-            command = ['ping', param, '1', timeout_param, str(self.PING_TIMEOUT), host]
+            command = ['ping', param, '3', timeout_param, str(self.PING_TIMEOUT), host]
             
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=self.PING_TIMEOUT + 0.5  # Add small buffer to subprocess timeout
+                timeout=self.PING_TIMEOUT * 3 + 0.5  # Add small buffer to subprocess timeout
             )
-            return result.returncode == 0
+            
+            if platform.system().lower() == 'windows':
+                return b'bytes=' in result.stdout or b'bytes from' in result.stdout
+            else:
+                return b'bytes from' in result.stdout
             
         except (subprocess.TimeoutExpired, subprocess.SubprocessError):
             return False
