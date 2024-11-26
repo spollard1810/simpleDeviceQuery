@@ -13,20 +13,23 @@ class DeviceManager:
         """Load devices from CSV file"""
         try:
             df = pd.read_csv(filepath)
-            required_columns = ['hostname', 'ip']
+            required_columns = ['hostname', 'ip', 'model_id']
             if not all(col in df.columns for col in required_columns):
-                raise ValueError("CSV must contain 'hostname' and 'ip' columns")
+                raise ValueError("CSV must contain 'hostname', 'ip', and 'model_id' columns")
 
             for _, row in df.iterrows():
+                if pd.isna(row['model_id']):
+                    print(f"Warning: Skipping {row['hostname']} - model_id is required")
+                    continue
+
                 device = Device(
                     hostname=row['hostname'],
                     ip=row['ip'],
-                    model_id=row.get('model_id', None)
+                    model_id=row['model_id']
                 )
-                # If model_id is provided, detect device type immediately
-                if device.model_id:
-                    device_type = device.detect_device_type()
-                    print(f"Detected device type for {device.hostname}: {device_type}")
+                # Detect device type immediately and store it
+                device._device_type = device.detect_device_type()
+                print(f"Detected device type for {device.hostname}: {device._device_type}")
                 
                 self.devices[device.hostname] = device
 

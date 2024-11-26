@@ -10,6 +10,7 @@ class Device:
     model_id: Optional[str] = None
     connection_status: bool = False
     _connection = None
+    _device_type: Optional[str] = None
 
     DEVICE_TYPE_MAPPING = {
         # Catalyst IOS/IOS-XE Switches
@@ -71,21 +72,23 @@ class Device:
     def connect(self, username: str, password: str) -> bool:
         """Establish SSH connection to device"""
         try:
-            device_type = self.detect_device_type()
+            # Require model_id for connection
+            if not self.model_id:
+                raise ValueError(f"Cannot connect to {self.hostname}: model_id is required")
+
+            # Detect device type if not already set
+            if not self._device_type:
+                self._device_type = self.detect_device_type()
+                print(f"Using device type {self._device_type} for {self.hostname}")
+
             device_params = {
-                'device_type': device_type,
+                'device_type': self._device_type,
                 'ip': self.ip,
                 'username': username,
                 'password': password,
             }
             
             self._connection = ConnectHandler(**device_params)
-            
-            # Detect model if not provided
-            if not self.model_id:
-                show_version = self._connection.send_command("show version")
-                self.model_id = self.detect_model(show_version)
-            
             self.connection_status = True
             return True
             
