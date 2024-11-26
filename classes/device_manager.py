@@ -37,19 +37,20 @@ class DeviceManager:
             print(f"Error loading CSV: {str(e)}")
 
     def export_command_output(self, hostname: str, command: str, output: str) -> None:
-        """Export command output to CSV for a specific device"""
-        filename = f"{hostname}_output.csv"
+        """Export command output to a single CSV file for all devices"""
+        # Use command name as filename (sanitized)
+        safe_command = command.replace('|', '').replace('/', '_').strip()
+        filename = f"command_output_{safe_command[:30]}.csv"
         
-        # Create 'outputs' directory if it doesn't exist
         os.makedirs('outputs', exist_ok=True)
         filepath = os.path.join('outputs', filename)
         
-        # Write output to CSV
+        # Write output to CSV with hostname column
         with open(filepath, 'a', newline='') as f:
             writer = csv.writer(f)
             if os.path.getsize(filepath) == 0:
-                writer.writerow(['Command', 'Output'])
-            writer.writerow([command, output])
+                writer.writerow(['Hostname', 'Command', 'Output'])
+            writer.writerow([hostname, command, output])
 
     def select_all_devices(self) -> None:
         """Select all devices"""
@@ -72,13 +73,23 @@ class DeviceManager:
 
     def export_parsed_output(self, hostname: str, command_name: str, parsed_data: List[Dict[str, str]], 
                             headers: List[str]) -> None:
-        """Export parsed command output to CSV"""
-        filename = f"{hostname}_{command_name.lower().replace(' ', '_')}.csv"
+        """Export parsed command output to a single CSV file for all devices"""
+        filename = f"{command_name.lower().replace(' ', '_')}_all_devices.csv"
         
         os.makedirs('outputs', exist_ok=True)
         filepath = os.path.join('outputs', filename)
         
-        with open(filepath, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
+        # Add hostname to each row of parsed data
+        for row in parsed_data:
+            row['hostname'] = hostname
+        
+        # Add hostname as first header
+        all_headers = ['hostname'] + headers
+        
+        # Append to existing file or create new one
+        file_exists = os.path.exists(filepath)
+        with open(filepath, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=all_headers)
+            if not file_exists:
+                writer.writeheader()
             writer.writerows(parsed_data)
