@@ -10,6 +10,20 @@ class DeviceManager:
     def __init__(self):
         self.devices: Dict[str, Device] = {}  # hostname -> Device mapping
         self.selected_devices: set = set()    # Set of selected hostnames
+        self.batch_prefix: str = ""           # Store the prefix for CSV files
+    def _set_batch_prefix(self, first_hostname: str) -> None:
+        """Set the batch prefix from the first device hostname"""
+        # Take first 3 characters, remove any non-alphanumeric chars, and convert to uppercase
+        self.batch_prefix = ''.join(c for c in first_hostname[:3] if c.isalnum()).upper()
+        if not self.batch_prefix:
+            self.batch_prefix = "DEV"  # Default prefix if no valid characters found
+
+    def _get_output_filename(self, base_filename: str) -> str:
+        """Generate filename with batch prefix"""
+        # Split the filename and extension
+        name, ext = os.path.splitext(base_filename)
+        # Add prefix to the filename
+        return f"{self.batch_prefix}_{name}{ext}"
 
     async def async_load_devices_from_csv(self, filepath: str, progress_callback=None) -> None:
         """Load devices from CSV file with async ping checks"""
@@ -25,6 +39,12 @@ class DeviceManager:
 
             # Clear existing devices
             self.devices.clear()
+
+            # Set batch prefix from first valid hostname
+            for _, row in df.iterrows():
+                if not pd.isna(row['hostname']) and str(row['hostname']).strip():
+                    self._set_batch_prefix(str(row['hostname']).strip())
+                    break
 
             # Create tasks for all devices
             tasks = []
@@ -79,7 +99,6 @@ class DeviceManager:
 
             # Export status report to CSV
             self._export_status_report(status_report, filepath)
-
             # Final status update
             if progress_callback:
                 progress_callback("finish", f"Loaded {loaded_devices} of {total_devices} devices")
@@ -98,15 +117,13 @@ class DeviceManager:
 
     def _export_status_report(self, status_report: List[Dict[str, str]], source_filepath: str) -> None:
         """Export device status report to CSV"""
-        # Create outputs directory if it doesn't exist
         os.makedirs('outputs', exist_ok=True)
         
         # Generate report filename based on source file
         source_filename = os.path.splitext(os.path.basename(source_filepath))[0]
-        report_filename = f"{source_filename}_status_report.csv"
+        report_filename = self._get_output_filename(f"{source_filename}_status_report.csv")
         report_filepath = os.path.join('outputs', report_filename)
         
-        # Write report to CSV
         headers = ['hostname', 'ip_address', 'model', 'status', 'device_type']
         with open(report_filepath, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
@@ -128,14 +145,12 @@ class DeviceManager:
 
     def export_command_output(self, hostname: str, command: str, output: str) -> None:
         """Export command output to a single CSV file for all devices"""
-        # Use command name as filename (sanitized)
         safe_command = command.replace('|', '').replace('/', '_').strip()
-        filename = f"command_output_{safe_command[:30]}.csv"
+        filename = self._get_output_filename(f"command_output_{safe_command[:30]}.csv")
         
         os.makedirs('outputs', exist_ok=True)
         filepath = os.path.join('outputs', filename)
         
-        # Write output to CSV with hostname column
         with open(filepath, 'a', newline='') as f:
             writer = csv.writer(f)
             if os.path.getsize(filepath) == 0:
@@ -162,9 +177,9 @@ class DeviceManager:
         return [self.devices[hostname] for hostname in self.selected_devices] 
 
     def export_parsed_output(self, hostname: str, command_name: str, parsed_data: List[Dict[str, str]], 
-                            headers: List[str]) -> None:
+                           headers: List[str]) -> None:
         """Export parsed command output to a single CSV file for all devices"""
-        filename = f"{command_name.lower().replace(' ', '_')}_all_devices.csv"
+        filename = self._get_output_filename(f"{command_name.lower().replace(' ', '_')}_all_devices.csv")
         
         os.makedirs('outputs', exist_ok=True)
         filepath = os.path.join('outputs', filename)
