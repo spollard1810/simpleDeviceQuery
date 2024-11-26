@@ -6,6 +6,7 @@ from typing import Optional
 import threading
 from classes.command_parser import COMMON_COMMANDS
 from gui.progress_dialog import ProgressDialog
+from gui.loading_dialog import LoadingDialog
 
 class CredentialsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -93,9 +94,28 @@ class MainWindow:
 
     def load_devices(self):
         filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if filepath:
-            self.device_manager.load_devices_from_csv(filepath)
-            self.update_device_list()
+        if not filepath:
+            return
+
+        loading_dialog = LoadingDialog(self.root, "Loading Devices")
+        
+        def load_thread():
+            try:
+                self.device_manager.load_devices_from_csv(
+                    filepath,
+                    progress_callback=lambda action, data=None: 
+                        self.root.after(0, loading_dialog.update, action, data)
+                )
+                # Update device list after successful load
+                self.root.after(0, self.update_device_list)
+            except Exception as e:
+                self.root.after(0, loading_dialog.update, "error", str(e))
+            finally:
+                if not loading_dialog.success:
+                    self.root.after(2000, loading_dialog.destroy)
+
+        thread = threading.Thread(target=load_thread)
+        thread.start()
 
     def update_device_list(self):
         self.device_list.delete(*self.device_list.get_children())

@@ -9,36 +9,28 @@ class DeviceManager:
         self.devices: Dict[str, Device] = {}  # hostname -> Device mapping
         self.selected_devices: set = set()    # Set of selected hostnames
 
-    def load_devices_from_csv(self, filepath: str) -> None:
-        """Load devices from CSV file"""
+    def load_devices_from_csv(self, filepath: str, progress_callback=None) -> None:
+        """Load devices from CSV file with progress updates"""
         try:
             # Read CSV file
             df = pd.read_csv(filepath)
-            
-            # Verify required columns
-            required_columns = ['hostname']
-            if not all(col in df.columns for col in required_columns):
-                raise ValueError("CSV must contain 'hostname' column")
-
-            # Count total devices before loading
             total_devices = len(df)
             loaded_devices = 0
             errors = []
+
+            if progress_callback:
+                progress_callback("start", total_devices)
 
             # Clear existing devices
             self.devices.clear()
 
             for index, row in df.iterrows():
                 try:
-                    # Skip empty rows
                     if pd.isna(row['hostname']) or str(row['hostname']).strip() == '':
                         errors.append(f"Row {index + 2}: Empty hostname")
                         continue
 
-                    # Clean hostname
                     hostname = str(row['hostname']).strip()
-                    
-                    # Get optional fields with default values
                     ip = str(row.get('ip', '')).strip() or None
                     model_id = str(row.get('model_id', '')).strip() or None
 
@@ -48,37 +40,37 @@ class DeviceManager:
                         model_id=model_id
                     )
                     
+                    # Update progress with current device
+                    if progress_callback:
+                        progress_callback("update", f"Checking {hostname}...")
+                    
                     # Ping device to check availability
                     device.ping()
                     
-                    # Detect device type immediately and store it
                     device._device_type = device.detect_device_type()
-                    print(f"Detected device type for {device.hostname}: {device._device_type}")
-                    
                     self.devices[device.hostname] = device
                     loaded_devices += 1
 
                 except Exception as e:
                     errors.append(f"Row {index + 2}: {str(e)}")
+                finally:
+                    if progress_callback:
+                        progress_callback("progress")
 
-            # Print summary
-            print(f"\nDevice Loading Summary:")
-            print(f"Total devices in CSV: {total_devices}")
-            print(f"Successfully loaded: {loaded_devices}")
-            print(f"Failed to load: {total_devices - loaded_devices}")
-            
+            # Final status update
+            if progress_callback:
+                progress_callback("finish", f"Loaded {loaded_devices} of {total_devices} devices")
+
             if errors:
-                print("\nErrors encountered:")
-                for error in errors[:10]:  # Show first 10 errors
-                    print(error)
+                error_msg = "\n".join(errors[:10])
                 if len(errors) > 10:
-                    print(f"...and {len(errors) - 10} more errors")
-
-            if loaded_devices == 0:
-                raise ValueError("No devices were successfully loaded from the CSV file")
+                    error_msg += f"\n...and {len(errors) - 10} more errors"
+                if progress_callback:
+                    progress_callback("error", error_msg)
 
         except Exception as e:
-            print(f"Error loading CSV: {str(e)}")
+            if progress_callback:
+                progress_callback("error", f"Error loading CSV: {str(e)}")
             raise
 
     def export_command_output(self, hostname: str, command: str, output: str) -> None:
