@@ -2,6 +2,34 @@
 
 A Python-based GUI application for bulk querying Cisco network devices and collecting their outputs in CSV format.
 
+## Installation
+
+1. Install Python 3.x from [python.org](https://www.python.org/downloads/)
+2. Download or clone this repository
+3. Run the appropriate launcher for your platform:
+   - Windows: Double-click `run.bat`
+   - Linux/Mac: Open terminal and run `./run.sh`
+
+The launcher will:
+- Check for Python installation
+- Install required dependencies
+- Start the application
+
+## Manual Installation
+
+If you prefer to install manually:
+
+1. Install Python 3.x
+2. Open terminal/command prompt in project directory
+3. Install requirements:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Run the application:
+   ```bash
+   python main.py
+   ```
+
 ## Features
 
 - GUI interface built with Tkinter

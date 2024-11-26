@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -19,11 +20,18 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
-*.manifest
-*.spec
-pip-log.txt
-pip-delete-this-directory.txt
+venv/
+.venv/
+
+# Logs and outputs
+logs/
+outputs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # Unit test / coverage reports
 htmlcov/
