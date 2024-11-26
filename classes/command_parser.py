@@ -126,24 +126,51 @@ class CommandParser:
 
     @staticmethod
     def parse_interface_status_detailed(output: str) -> List[Dict[str, str]]:
-        """Parse 'show interface status | include connected' output"""
+        """Parse 'show interface status' output"""
         interfaces = []
-        # Match both connected and notconnect status
-        pattern = r"(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)"
         
-        for line in output.splitlines():
-            if 'connected' in line.lower():  # Only include connected interfaces
-                parts = line.split()
-                if len(parts) >= 7:
+        # Skip header lines
+        lines = [line for line in output.splitlines() if line.strip() and 'Port' not in line and '----' not in line]
+        
+        for line in lines:
+            # Split line while preserving spaces in description
+            # This handles variable-width fields better
+            try:
+                # First, handle the fixed-width fields from the end
+                parts = line.rstrip().split()
+                if len(parts) < 7:
+                    continue
+                    
+                # Work backwards from the end for fixed fields
+                type_ = parts[-1]
+                speed = parts[-2]
+                duplex = parts[-3]
+                vlan = parts[-4]
+                status = parts[-5]
+                
+                # Handle interface name (always first field)
+                interface = parts[0]
+                
+                # Description might contain spaces, so join remaining parts
+                description = ' '.join(parts[1:-5]).strip()
+                if description == '--':
+                    description = ''
+                
+                # Only include if status contains 'connected'
+                if 'connected' in status.lower():
                     interfaces.append({
-                        'interface': parts[0],
-                        'description': parts[1] if parts[1] != '--' else '',
-                        'status': parts[2],
-                        'vlan': parts[3],
-                        'duplex': parts[4],
-                        'speed': parts[5],
-                        'type': parts[6]
+                        'interface': interface[:30],  # Limit field lengths
+                        'description': description[:50],
+                        'status': status[:15],
+                        'vlan': vlan[:10],
+                        'duplex': duplex[:10],
+                        'speed': speed[:10],
+                        'type': type_[:20]
                     })
+            except Exception as e:
+                print(f"Error parsing line: {line} - {str(e)}")
+                continue
+                
         return interfaces
 
 # Define common commands with their parsers and CSV headers
