@@ -4,6 +4,9 @@ import re
 from netmiko import ConnectHandler
 import platform
 import subprocess
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import socket
 
 @dataclass
 class Device:
@@ -14,7 +17,8 @@ class Device:
     _connection = None
     _device_type: Optional[str] = None
     is_online: bool = False
-
+    PING_TIMEOUT = 1  # 1 second timeout for ping
+    
     DEVICE_TYPE_MAPPING = {
         # Catalyst IOS/IOS-XE Switches
         r'[Ww][Ss]-?[Cc]': 'cisco_ios',        # WS-C3750, WS-C4500, etc.
@@ -114,24 +118,74 @@ class Device:
             print(f"Command execution failed on {self.hostname}: {str(e)}")
             return ""
 
-    def ping(self) -> bool:
-        """Ping the device to check if it's online"""
+    async def async_ping(self) -> bool:
+        """Asynchronous ping with fast timeout"""
         try:
             # Get the host to ping (prefer IP if available)
             host = self.ip if self.ip else self.hostname
             
-            # Determine the ping command based on the operating system
-            param = '-n' if platform.system().lower() == 'windows' else '-c'
-            command = ['ping', param, '1', host]
+            # Create a socket connection with timeout
+            loop = asyncio.get_event_loop()
             
-            # Run the ping command
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            # Update online status based on ping result
-            self.is_online = result.returncode == 0
-            return self.is_online
-            
+            # Use ThreadPoolExecutor for the blocking socket operation
+            with ThreadPoolExecutor() as pool:
+                try:
+                    result = await loop.run_in_executor(
+                        pool,
+                        self._check_host_port,
+                        host,
+                        22,  # Check SSH port
+                        self.PING_TIMEOUT
+                    )
+                    self.is_online = result
+                    return result
+                except (socket.timeout, socket.error, ConnectionRefusedError):
+                    # Try ICMP ping as fallback
+                    result = await loop.run_in_executor(
+                        pool,
+                        self._icmp_ping,
+                        host
+                    )
+                    self.is_online = result
+                    return result
+                    
         except Exception as e:
             print(f"Ping failed for {self.hostname}: {str(e)}")
             self.is_online = False
-            return False 
+            return False
+
+    def _check_host_port(self, host: str, port: int, timeout: float) -> bool:
+        """Check if a host's port is open"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            return result == 0
+
+    def _icmp_ping(self, host: str) -> bool:
+        """Perform ICMP ping with timeout"""
+        try:
+            param = '-n' if platform.system().lower() == 'windows' else '-c'
+            timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
+            command = ['ping', param, '1', timeout_param, str(self.PING_TIMEOUT), host]
+            
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=self.PING_TIMEOUT + 0.5  # Add small buffer to subprocess timeout
+            )
+            return result.returncode == 0
+            
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+            return False
+
+    # For backward compatibility
+    def ping(self) -> bool:
+        """Synchronous wrapper for async_ping"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_ping()) 

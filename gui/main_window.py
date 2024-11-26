@@ -118,8 +118,10 @@ class MainWindow:
         thread.start()
 
     def update_device_list(self):
+        """Update the device list with current status"""
         self.device_list.delete(*self.device_list.get_children())
         for hostname, device in self.device_manager.devices.items():
+            # Set status based on connection and online state
             if device.connection_status:
                 status = "Connected"
             elif not device.is_online:
@@ -127,10 +129,15 @@ class MainWindow:
             else:
                 status = "Disconnected"
             
+            # Update the treeview with device information
             ip_address = device.ip or "N/A"
             model = device.model_id or "Unknown"
             self.device_list.insert("", tk.END, text=hostname, 
-                                  values=(ip_address, model, status))
+                                  values=(ip_address, model, status),
+                                  tags=('offline',) if not device.is_online else ())
+
+        # Optional: Add color coding for offline devices
+        self.device_list.tag_configure('offline', foreground='red')
 
     def select_all(self):
         self.device_manager.select_all_devices()

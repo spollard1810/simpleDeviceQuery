@@ -3,20 +3,22 @@ from typing import List, Dict
 from .device import Device
 import csv
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 class DeviceManager:
     def __init__(self):
         self.devices: Dict[str, Device] = {}  # hostname -> Device mapping
         self.selected_devices: set = set()    # Set of selected hostnames
 
-    def load_devices_from_csv(self, filepath: str, progress_callback=None) -> None:
-        """Load devices from CSV file with progress updates"""
+    async def async_load_devices_from_csv(self, filepath: str, progress_callback=None) -> None:
+        """Load devices from CSV file with async ping checks"""
         try:
-            # Read CSV file
             df = pd.read_csv(filepath)
             total_devices = len(df)
             loaded_devices = 0
             errors = []
+            status_report = []  # List to store device status information
 
             if progress_callback:
                 progress_callback("start", total_devices)
@@ -24,6 +26,10 @@ class DeviceManager:
             # Clear existing devices
             self.devices.clear()
 
+            # Create tasks for all devices
+            tasks = []
+            devices = []
+            
             for index, row in df.iterrows():
                 try:
                     if pd.isna(row['hostname']) or str(row['hostname']).strip() == '':
@@ -40,22 +46,39 @@ class DeviceManager:
                         model_id=model_id
                     )
                     
-                    # Update progress with current device
                     if progress_callback:
                         progress_callback("update", f"Checking {hostname}...")
                     
-                    # Ping device to check availability
-                    device.ping()
+                    devices.append(device)
+                    tasks.append(device.async_ping())
                     
-                    device._device_type = device.detect_device_type()
-                    self.devices[device.hostname] = device
-                    loaded_devices += 1
-
                 except Exception as e:
                     errors.append(f"Row {index + 2}: {str(e)}")
-                finally:
-                    if progress_callback:
-                        progress_callback("progress")
+
+            # Wait for all ping results
+            results = await asyncio.gather(*tasks)
+            
+            # Process results and create status report
+            for device, is_online in zip(devices, results):
+                if is_online:
+                    device._device_type = device.detect_device_type()
+                self.devices[device.hostname] = device
+                loaded_devices += 1
+                
+                # Add device status to report
+                status_report.append({
+                    'hostname': device.hostname,
+                    'ip_address': device.ip or 'N/A',
+                    'model': device.model_id or 'Unknown',
+                    'status': 'Online' if is_online else 'Offline',
+                    'device_type': device._device_type if is_online else 'N/A'
+                })
+                
+                if progress_callback:
+                    progress_callback("progress")
+
+            # Export status report to CSV
+            self._export_status_report(status_report, filepath)
 
             # Final status update
             if progress_callback:
@@ -72,6 +95,36 @@ class DeviceManager:
             if progress_callback:
                 progress_callback("error", f"Error loading CSV: {str(e)}")
             raise
+
+    def _export_status_report(self, status_report: List[Dict[str, str]], source_filepath: str) -> None:
+        """Export device status report to CSV"""
+        # Create outputs directory if it doesn't exist
+        os.makedirs('outputs', exist_ok=True)
+        
+        # Generate report filename based on source file
+        source_filename = os.path.splitext(os.path.basename(source_filepath))[0]
+        report_filename = f"{source_filename}_status_report.csv"
+        report_filepath = os.path.join('outputs', report_filename)
+        
+        # Write report to CSV
+        headers = ['hostname', 'ip_address', 'model', 'status', 'device_type']
+        with open(report_filepath, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(status_report)
+
+    # For backward compatibility
+    def load_devices_from_csv(self, filepath: str, progress_callback=None) -> None:
+        """Synchronous wrapper for async_load_devices_from_csv"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        loop.run_until_complete(
+            self.async_load_devices_from_csv(filepath, progress_callback)
+        )
 
     def export_command_output(self, hostname: str, command: str, output: str) -> None:
         """Export command output to a single CSV file for all devices"""

@@ -50,6 +50,8 @@ class LoadingDialog(tk.Toplevel):
             self.progress["value"] += 1
         elif action == "update":
             self.status_label["text"] = data
+            if "Checking" in data:
+                self.status_label["text"] = f"Checking online status: {data}"
         elif action == "error":
             self.error_text.pack(pady=10, padx=10)  # Show error text
             self.error_text.insert(tk.END, data)
