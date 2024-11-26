@@ -23,6 +23,11 @@ class DeviceManager:
                     ip=row['ip'],
                     model_id=row.get('model_id', None)
                 )
+                # If model_id is provided, detect device type immediately
+                if device.model_id:
+                    device_type = device.detect_device_type()
+                    print(f"Detected device type for {device.hostname}: {device_type}")
+                
                 self.devices[device.hostname] = device
 
         except Exception as e:
