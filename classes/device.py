@@ -6,7 +6,7 @@ from netmiko import ConnectHandler
 @dataclass
 class Device:
     hostname: str
-    ip: str
+    ip: Optional[str] = None
     model_id: Optional[str] = None
     connection_status: bool = False
     _connection = None
@@ -72,10 +72,6 @@ class Device:
     def connect(self, username: str, password: str) -> bool:
         """Establish SSH connection to device"""
         try:
-            # Require model_id for connection
-            if not self.model_id:
-                raise ValueError(f"Cannot connect to {self.hostname}: model_id is required")
-
             # Detect device type if not already set
             if not self._device_type:
                 self._device_type = self.detect_device_type()
@@ -83,7 +79,7 @@ class Device:
 
             device_params = {
                 'device_type': self._device_type,
-                'ip': self.ip,
+                'host': self.ip if self.ip else self.hostname,
                 'username': username,
                 'password': password,
             }

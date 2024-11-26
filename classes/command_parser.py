@@ -178,4 +178,8 @@ COMMON_COMMANDS = {
         "parser": CommandParser.parse_inventory,
         "headers": ["name", "description", "serial"]
     }
-} 
+}
+
+# Add these constants at the end of the file
+DEFAULT_DEVICE_TYPE = 'cisco_ios'
+REQUIRED_CSV_HEADERS = ['hostname']  # IP address is no longer required 

@@ -101,8 +101,10 @@ class MainWindow:
         self.device_list.delete(*self.device_list.get_children())
         for hostname, device in self.device_manager.devices.items():
             status = "Connected" if device.connection_status else "Disconnected"
+            ip_address = device.ip or "N/A"
+            model = device.model_id or "Unknown"
             self.device_list.insert("", tk.END, text=hostname, 
-                                  values=(device.ip, device.model_id or "Unknown", status))
+                                  values=(ip_address, model, status))
 
     def select_all(self):
         self.device_manager.select_all_devices()
