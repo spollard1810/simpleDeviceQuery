@@ -124,12 +124,34 @@ class CommandParser:
             inventory.append(current_item)
         return inventory
 
+    @staticmethod
+    def parse_interface_status_detailed(output: str) -> List[Dict[str, str]]:
+        """Parse 'show interface status | include connected' output"""
+        interfaces = []
+        # Match both connected and notconnect status
+        pattern = r"(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)"
+        
+        for line in output.splitlines():
+            if 'connected' in line.lower():  # Only include connected interfaces
+                parts = line.split()
+                if len(parts) >= 7:
+                    interfaces.append({
+                        'interface': parts[0],
+                        'description': parts[1] if parts[1] != '--' else '',
+                        'status': parts[2],
+                        'vlan': parts[3],
+                        'duplex': parts[4],
+                        'speed': parts[5],
+                        'type': parts[6]
+                    })
+        return interfaces
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
-        "command": "show interface | include connected",
-        "parser": CommandParser.parse_interface_status,
-        "headers": ["interface", "status", "protocol"]
+        "command": "show interface status | include connected",
+        "parser": CommandParser.parse_interface_status_detailed,
+        "headers": ["interface", "description", "status", "vlan", "duplex", "speed", "type"]
     },
     "Show IP Interface Brief": {
         "command": "show ip interface brief",
