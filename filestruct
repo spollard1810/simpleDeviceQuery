@@ -1,0 +1,12 @@
+simpledevicequery/
+├── __init__.py
+├── main.py
+├── classes/
+│   ├── __init__.py
+│   ├── device.py
+│   ├── device_manager.py
+│   ├── connection.py
+│   └── connection_manager.py
+└── gui/
+    ├── __init__.py
+    └── main_window.py
