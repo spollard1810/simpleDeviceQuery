@@ -256,7 +256,7 @@ class MainWindow:
                     results = self.connection_manager.execute_command_on_devices(
                         available_devices, 
                         command,
-                        callback=lambda device, status: progress.add_message(f"{device}: {status}")
+                        callback=lambda: progress.add_message("Command execution in progress...")
                     )
 
                     for hostname, output in results.items():

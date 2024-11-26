@@ -79,6 +79,8 @@ class ConnectionManager:
         def execute_single_command(device: Device) -> tuple:
             try:
                 output = device.execute_command(command)
+                if callback:
+                    callback()
                 return device.hostname, output
             except Exception as e:
                 return device.hostname, f"Error: {str(e)}"
@@ -92,8 +94,6 @@ class ConnectionManager:
             for future in as_completed(future_to_device):
                 hostname, output = future.result()
                 results[hostname] = output
-                if callback:
-                    callback()
 
         return results
 
