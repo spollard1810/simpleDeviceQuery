@@ -56,7 +56,6 @@ A Python-based GUI application for bulk querying Cisco network devices and colle
 
 4. Execute commands across all selected devices
    - Results automatically exported to CSV
-   - One CSV file per device with command outputs
 
 ## Requirements
 
