@@ -788,7 +788,8 @@ class CommandParser:
         Number  Description      State   Model         Serial
         ------------------------------------------------------------
         101    FEX0101          Online  N2K-C2248TP-E SSI1234567
-        102    FEX0102          Online  N2K-C2248TP-1E SSI7654321
+        102    FEX0102 (IDF)    Online  N2K-C2248TP-1E SSI7654321
+        103    FEX0103 (Floor 2) Online N2K-C2248TP-E SSI9876543
         """
         fex_list = []
         
@@ -809,16 +810,36 @@ class CommandParser:
                 continue
             # Parse FEX entries
             if header_found and line.strip():
-                # Split line and handle variable spacing
-                parts = [part for part in line.split() if part]
-                if len(parts) >= 5:
+                try:
+                    # First get the number (always at start of line)
+                    match = re.match(r'(\d+)\s+(.+)', line)
+                    if not match:
+                        continue
+                        
+                    number = match.group(1)
+                    rest_of_line = match.group(2)
+                    
+                    # Work backwards from the end since those fields are fixed
+                    parts = rest_of_line.rstrip().split()
+                    serial = parts[-1]
+                    model = parts[-2]
+                    state = parts[-3]
+                    
+                    # Everything between number and state is the description
+                    # Find state position and extract description
+                    state_pos = rest_of_line.rfind(state)
+                    description = rest_of_line[:state_pos].strip()
+                    
                     fex_list.append({
-                        'number': parts[0],
-                        'description': parts[1],
-                        'state': parts[2],
-                        'model': parts[3],
-                        'serial': parts[4]
+                        'number': number,
+                        'description': description,
+                        'state': state,
+                        'model': model,
+                        'serial': serial
                     })
+                except Exception as e:
+                    print(f"Error parsing FEX line: {line} - {str(e)}")
+                    continue
         
         return fex_list
 
