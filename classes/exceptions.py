@@ -1,5 +1,5 @@
 class CommandError(Exception):
-    """Raised when a command execution fails"""
+    """Exception raised when a command execution fails"""
     pass
 
 class SNMPError(Exception):

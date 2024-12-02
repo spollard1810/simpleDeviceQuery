@@ -7,6 +7,8 @@ import subprocess
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import socket
+from .command_parser import DEFAULT_DEVICE_TYPE
+from .exceptions import CommandError
 
 @dataclass
 class Device:
@@ -60,18 +62,19 @@ class Device:
         if not model and not self.model_id:
             return 'cisco_xe'  # Default to IOS-XE for newer devices
         
-        model_str = model or self.model_id
-        model_str = model_str.strip()
-
-        for pattern, device_type in self.DEVICE_TYPE_MAPPING.items():
-            if re.search(pattern, model_str, re.IGNORECASE):
-                return device_type
+        model = self.model_id.lower()
         
-        # If no match found, try to make an educated guess based on model number
-        if re.search(r'[Cc]9|[Cc]3[89]|[Ii][Ss][Rr]4', model_str):
-            return 'cisco_xe'  # Newer platforms typically run IOS-XE
-        
-        return 'cisco_ios'  # Fall back to IOS for older/unknown devices
+        # Nexus detection
+        if any(nexus in model for nexus in ['nexus', 'n9k', 'n7k', 'n5k', 'n3k', 'n2k', 'nx-os', 'nxos']):
+            return 'cisco_nxos'
+        # IOS detection
+        elif any(ios in model for ios in ['catalyst', 'ios', '29', '35', '45', '65', 'c2960', 'c3560', 'c3750', 'c4500', 'c6500']):
+            return 'cisco_ios'
+        # ASA detection
+        elif 'asa' in model:
+            return 'cisco_asa'
+        # Default to IOS if no specific match
+        return DEFAULT_DEVICE_TYPE
 
     def detect_model(self, show_version_output: str) -> str:
         """Detect Cisco model from show version output"""
