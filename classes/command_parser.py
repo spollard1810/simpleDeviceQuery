@@ -785,23 +785,23 @@ class CommandParser:
         """Parse 'show fex' output from Nexus switches
         
         Example output:
-        FEX         Description                       State       Model            Serial
-        --------------------------------------------------------------------------------
-        101         FEX0101                           Online      N2K-C2248TP-E   SSI1234567
-        102         FEX0102                           Online      N2K-C2248TP-1E  SSI7654321
+        Number  Description      State   Model         Serial
+        ------------------------------------------------------------
+        101    FEX0101          Online  N2K-C2248TP-E SSI1234567
+        102    FEX0102          Online  N2K-C2248TP-1E SSI7654321
         """
         fex_list = []
         
         # Skip if empty output or error
         if not output or "Invalid command" in output:
             return fex_list
-        
+            
         lines = output.splitlines()
         header_found = False
         
         for line in lines:
-            # Look for the header line
-            if "FEX" in line and "Description" in line and "State" in line:
+            # Look for the header line - using exact field names
+            if "Number" in line and "Description" in line and "State" in line:
                 header_found = True
                 continue
             # Skip separator line
@@ -813,7 +813,7 @@ class CommandParser:
                 parts = [part for part in line.split() if part]
                 if len(parts) >= 5:
                     fex_list.append({
-                        'fex_id': parts[0],
+                        'number': parts[0],
                         'description': parts[1],
                         'state': parts[2],
                         'model': parts[3],
@@ -957,7 +957,7 @@ COMMON_COMMANDS = {
     "Show FEX": {
         "command": "show fex",
         "parser": CommandParser.parse_show_fex,
-        "headers": ["fex_id", "description", "state", "model", "serial"]
+        "headers": ["number", "description", "state", "model", "serial"]
     }
 }
 
