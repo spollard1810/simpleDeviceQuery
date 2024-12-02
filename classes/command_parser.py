@@ -23,18 +23,31 @@ class CommandParser:
         """Parse 'show ip interface brief' output"""
         interfaces = []
         for line in output.splitlines():
-            # Skip header line
-            if "Interface" in line or not line.strip():
+            # Skip header lines and empty lines more robustly
+            if not line.strip() or any(header in line for header in ['Interface', 'Protocol', '----']):
                 continue
             
-            parts = line.split()
-            if len(parts) >= 6:
-                interfaces.append({
-                    'interface': parts[0],
-                    'ip_address': parts[1],
-                    'status': parts[4],
-                    'protocol': parts[5]
-                })
+            try:
+                # Handle variable spacing in output
+                parts = line.split()
+                if len(parts) >= 4:  # Need at least interface, ip, status, protocol
+                    # Some devices might show "unassigned" or "not set" for IP
+                    ip_address = parts[1] if parts[1] not in ['unassigned', 'not', 'none'] else ''
+                    
+                    # Normalize status and protocol
+                    status = parts[-2].lower()
+                    protocol = parts[-1].lower()
+                    
+                    interfaces.append({
+                        'interface': parts[0][:30],
+                        'ip_address': ip_address[:15],
+                        'status': status[:15],
+                        'protocol': protocol[:15]
+                    })
+            except Exception as e:
+                print(f"Error parsing line: {line} - {str(e)}")
+                continue
+                
         return interfaces
 
     @staticmethod
@@ -42,17 +55,31 @@ class CommandParser:
         """Parse 'show vlan brief' output"""
         vlans = []
         for line in output.splitlines():
-            # Skip headers and footers
-            if not line.strip() or "VLAN" in line or "----" in line:
+            # Skip headers, footers, and empty lines more robustly
+            if not line.strip() or any(skip in line for skip in ['VLAN', '----', 'active', 'VLAN Type']):
                 continue
             
-            parts = line.split()
-            if len(parts) >= 2:
-                vlans.append({
-                    'vlan_id': parts[0],
-                    'name': parts[1],
-                    'status': parts[2] if len(parts) > 2 else 'active'
-                })
+            try:
+                parts = line.split()
+                if len(parts) >= 2:
+                    vlan_id = parts[0]
+                    # Handle cases where name might contain spaces
+                    name_parts = parts[1:-1] if len(parts) > 2 else [parts[1]]
+                    name = ' '.join(name_parts)
+                    # Normalize status
+                    status = parts[-1].lower() if len(parts) > 2 else 'active'
+                    
+                    # Validate VLAN ID is numeric
+                    if vlan_id.isdigit() and 1 <= int(vlan_id) <= 4094:
+                        vlans.append({
+                            'vlan_id': vlan_id[:4],
+                            'name': name[:32],
+                            'status': status[:10]
+                        })
+            except Exception as e:
+                print(f"Error parsing line: {line} - {str(e)}")
+                continue
+                
         return vlans
 
     @staticmethod
@@ -60,18 +87,36 @@ class CommandParser:
         """Parse 'show mac address-table' output"""
         mac_entries = []
         for line in output.splitlines():
-            # Skip headers
-            if "Mac Address Table" in line or "----" in line or not line.strip():
+            # Skip headers and empty lines more robustly
+            if not line.strip() or any(header in line for header in [
+                'Mac Address Table', 'Vlan', '----', 'Total', 'Multicast'
+            ]):
                 continue
             
-            parts = line.split()
-            if len(parts) >= 4:
-                mac_entries.append({
-                    'vlan': parts[0],
-                    'mac_address': parts[1],
-                    'type': parts[2],
-                    'port': parts[3]
-                })
+            try:
+                parts = line.split()
+                if len(parts) >= 4:
+                    # Normalize MAC address format
+                    mac = parts[1].lower().replace('.', '').replace(':', '')
+                    mac = ':'.join([mac[i:i+2] for i in range(0, 12, 2)])
+                    
+                    # Normalize type field
+                    type_ = parts[2].lower()
+                    if 'dynamic' in type_:
+                        type_ = 'dynamic'
+                    elif 'static' in type_:
+                        type_ = 'static'
+                    
+                    mac_entries.append({
+                        'vlan': parts[0][:4],
+                        'mac_address': mac[:17],  # xx:xx:xx:xx:xx:xx
+                        'type': type_[:8],
+                        'port': parts[3][:20]
+                    })
+            except Exception as e:
+                print(f"Error parsing line: {line} - {str(e)}")
+                continue
+                
         return mac_entries
 
     @staticmethod
@@ -81,22 +126,39 @@ class CommandParser:
         current_neighbor = {}
         
         for line in output.splitlines():
-            if "Device ID:" in line:
-                if current_neighbor:
-                    neighbors.append(current_neighbor)
-                current_neighbor = {'device_id': line.split("Device ID:")[1].strip()}
-            elif "IP address:" in line:
-                current_neighbor['ip_address'] = line.split("IP address:")[1].strip()
-            elif "Platform:" in line:
-                platform_parts = line.split("Platform:")[1].split(",")
-                current_neighbor['platform'] = platform_parts[0].strip()
-            elif "Interface:" in line and "Port ID" in line:
-                interface_parts = line.split(",")
-                current_neighbor['local_interface'] = interface_parts[0].split(":")[1].strip()
-                current_neighbor['remote_interface'] = interface_parts[1].split(":")[1].strip()
+            try:
+                line = line.strip()
+                if "Device ID:" in line:
+                    if current_neighbor:
+                        neighbors.append(current_neighbor)
+                    current_neighbor = {'device_id': line.split("Device ID:", 1)[1].strip()}
+                elif "IP address:" in line:
+                    # Handle multiple IP addresses
+                    ips = re.findall(r'IP address:\s*(\S+)', line)
+                    if ips:
+                        current_neighbor['ip_address'] = ips[0]  # Take first IP if multiple
+                elif "Platform:" in line:
+                    # Handle platform and capabilities
+                    platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:', line)
+                    if platform_match:
+                        current_neighbor['platform'] = platform_match.group(1).strip()
+                elif "Interface:" in line and "Port ID" in line:
+                    # Handle interface information more robustly
+                    local_match = re.search(r'Interface:\s*([^,]+)', line)
+                    remote_match = re.search(r'Port ID \(outgoing port\):\s*([^,]+)', line)
+                    if local_match:
+                        current_neighbor['local_interface'] = local_match.group(1).strip()
+                    if remote_match:
+                        current_neighbor['remote_interface'] = remote_match.group(1).strip()
                 
+            except Exception as e:
+                print(f"Error parsing CDP line: {line} - {str(e)}")
+                continue
+        
+        # Don't forget the last neighbor
         if current_neighbor:
             neighbors.append(current_neighbor)
+        
         return neighbors
 
     @staticmethod
@@ -129,14 +191,18 @@ class CommandParser:
         """Parse 'show interface status' output"""
         interfaces = []
         
-        # Skip header lines
-        lines = [line for line in output.splitlines() if line.strip() and 'Port' not in line and '----' not in line]
+        # Skip header lines and empty lines more robustly
+        lines = [
+            line for line in output.splitlines() 
+            if line.strip() 
+            and not any(header in line for header in ['Port', 'Name', '----'])
+        ]
         
         for line in lines:
             try:
                 # Split the line into parts
                 parts = line.rstrip().split()
-                if len(parts) < 6:  # Changed from 7 to 6 since description is optional
+                if len(parts) < 6:  # Need at least interface, status, vlan, duplex, speed, type
                     continue
                     
                 # Handle interface name (always first field)
@@ -152,19 +218,30 @@ class CommandParser:
                 # Everything between interface and status is the description (might be empty)
                 description_parts = parts[1:-5] if len(parts) > 6 else []
                 description = ' '.join(description_parts).strip()
-                if description == '--' or not description:
+                
+                # Handle various forms of empty/default description
+                if description in ['--', 'none', 'None', ''] or not description:
                     description = ''
                 
+                # Normalize status field
+                status = status.lower()
+                
                 # Only include if status contains 'connected'
-                if 'connected' in status.lower():
+                if 'connected' in status:
+                    # Clean and normalize fields
+                    interface = interface.strip()
+                    vlan = 'trunk' if vlan.lower() in ['trunk', 'routed'] else vlan
+                    duplex = duplex.lower().replace('a-', 'auto-')  # Normalize auto-duplex
+                    speed = speed.lower().replace('a-', 'auto-')    # Normalize auto-speed
+                    
                     interfaces.append({
-                        'interface': interface[:30],  # Limit field lengths
-                        'description': description[:50],
-                        'status': status[:15],
-                        'vlan': vlan[:10],
-                        'duplex': duplex[:10],
-                        'speed': speed[:10],
-                        'type': type_[:20]
+                        'interface': interface[:30],      # Limit field lengths
+                        'description': description[:50],  # Limit description length
+                        'status': status[:15],           # Usually 'connected'
+                        'vlan': vlan[:10],               # VLAN or 'trunk'
+                        'duplex': duplex[:10],           # full/half/auto
+                        'speed': speed[:10],             # 10/100/1000/auto
+                        'type': type_[:20]               # Interface type
                     })
             except Exception as e:
                 print(f"Error parsing line: {line} - {str(e)}")
@@ -430,6 +507,273 @@ class CommandParser:
         })
         return summary
 
+    @staticmethod
+    def parse_interface_transceiver(output: str) -> List[Dict[str, str]]:
+        """Parse 'show interface transceiver' output"""
+        transceivers = []
+        current_interface = None
+        
+        for line in output.splitlines():
+            try:
+                if 'Temperature' not in line and 'current' not in line:
+                    # This is an interface line
+                    interface_match = re.match(r'^(\S+)', line)
+                    if interface_match:
+                        current_interface = interface_match.group(1)
+                elif current_interface and any(x in line.lower() for x in ['temperature', 'voltage', 'current', 'power']):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        transceivers.append({
+                            'interface': current_interface,
+                            'parameter': parts[0].lower(),
+                            'value': parts[1],
+                            'status': parts[2].lower()
+                        })
+            except Exception as e:
+                print(f"Error parsing transceiver line: {line} - {str(e)}")
+                continue
+        
+        return transceivers
+
+    @staticmethod
+    def parse_power_inline(output: str) -> List[Dict[str, str]]:
+        """Parse 'show power inline' output"""
+        poe_ports = []
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or any(x in line for x in ['Interface', '----']):
+                    continue
+                
+                parts = line.split()
+                if len(parts) >= 6:
+                    poe_ports.append({
+                        'interface': parts[0],
+                        'admin': parts[1].lower(),
+                        'oper': parts[2].lower(),
+                        'power_draw': parts[3],
+                        'device': ' '.join(parts[4:-1]),
+                        'class': parts[-1]
+                    })
+            except Exception as e:
+                print(f"Error parsing PoE line: {line} - {str(e)}")
+                continue
+        
+        return poe_ports
+
+    @staticmethod
+    def parse_interface_counters_errors(output: str) -> List[Dict[str, str]]:
+        """Parse 'show interface counters errors' output"""
+        error_counters = []
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or any(x in line for x in ['Port', '----']):
+                    continue
+                
+                parts = line.split()
+                if len(parts) >= 5:
+                    error_counters.append({
+                        'interface': parts[0],
+                        'align_errors': parts[1],
+                        'fcs_errors': parts[2],
+                        'xmit_errors': parts[3],
+                        'rcv_errors': parts[4],
+                        'undersize': parts[5] if len(parts) > 5 else '0',
+                        'oversize': parts[6] if len(parts) > 6 else '0'
+                    })
+            except Exception as e:
+                print(f"Error parsing error counters line: {line} - {str(e)}")
+                continue
+        
+        return error_counters
+
+    @staticmethod
+    def parse_interface_storm_control(output: str) -> List[Dict[str, str]]:
+        """Parse 'show interface storm-control' output"""
+        storm_control = []
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or 'Interface' in line or '----' in line:
+                    continue
+                
+                parts = line.split()
+                if len(parts) >= 4:
+                    storm_control.append({
+                        'interface': parts[0],
+                        'broadcast_level': parts[1],
+                        'multicast_level': parts[2],
+                        'unicast_level': parts[3]
+                    })
+            except Exception as e:
+                print(f"Error parsing storm control line: {line} - {str(e)}")
+                continue
+        
+        return storm_control
+
+    @staticmethod
+    def parse_interface_trunk(output: str) -> List[Dict[str, str]]:
+        """Parse 'show interface trunk' output"""
+        trunks = []
+        current_interface = None
+        mode = None
+        native_vlan = None
+        allowed_vlans = None
+        
+        for line in output.splitlines():
+            try:
+                if 'Port' in line or '----' in line:
+                    continue
+                    
+                if line.strip():
+                    parts = line.split()
+                    if len(parts) >= 5:  # Mode line
+                        current_interface = parts[0]
+                        mode = parts[1].lower()
+                        encapsulation = parts[2].lower()
+                        status = parts[3].lower()
+                        native_vlan = parts[4]
+                    elif current_interface and 'allowed' in line.lower():
+                        # This line contains allowed VLANs
+                        allowed_vlans = line.split(':')[1].strip()
+                        trunks.append({
+                            'interface': current_interface,
+                            'mode': mode,
+                            'encapsulation': encapsulation,
+                            'status': status,
+                            'native_vlan': native_vlan,
+                            'allowed_vlans': allowed_vlans
+                        })
+            except Exception as e:
+                print(f"Error parsing trunk line: {line} - {str(e)}")
+                continue
+        
+        return trunks
+
+    @staticmethod
+    def parse_authentication_sessions(output: str) -> List[Dict[str, str]]:
+        """Parse 'show authentication sessions' output"""
+        sessions = []
+        current_interface = None
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or 'Interface' in line or '----' in line:
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 6:
+                    sessions.append({
+                        'interface': parts[0],
+                        'mac': parts[1],
+                        'method': parts[2],
+                        'domain': parts[3],
+                        'status': parts[4],
+                        'session': parts[5]
+                    })
+            except Exception as e:
+                print(f"Error parsing auth session line: {line} - {str(e)}")
+                continue
+        
+        return sessions
+
+    @staticmethod
+    def parse_environment(output: str) -> List[Dict[str, str]]:
+        """Parse 'show environment all' output"""
+        sensors = []
+        current_section = None
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or '----' in line:
+                    continue
+                    
+                if 'Temperature' in line or 'Power' in line or 'Fan' in line:
+                    current_section = line.split()[0].lower()
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 3:
+                    sensor_name = parts[0]
+                    # Handle different output formats
+                    if 'normal' in line.lower() or 'ok' in line.lower():
+                        status = 'normal'
+                        value = parts[-2] if len(parts) > 2 else 'N/A'
+                    else:
+                        status = parts[-1].lower()
+                        value = parts[-2] if len(parts) > 2 else 'N/A'
+                    
+                    sensors.append({
+                        'section': current_section,
+                        'sensor': sensor_name,
+                        'value': value,
+                        'status': status
+                    })
+            except Exception as e:
+                print(f"Error parsing environment line: {line} - {str(e)}")
+                continue
+        
+        return sensors
+
+    @staticmethod
+    def parse_logging(output: str) -> List[Dict[str, str]]:
+        """Parse 'show logging' output"""
+        logs = []
+        
+        # Regular expression for common syslog format
+        syslog_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)(?:\.\d+)?\s+(\w+):\s+%(\w+)-\d-(\w+):\s+(.+)'
+        
+        for line in output.splitlines():
+            try:
+                if 'Log Buffer' in line or not line.strip():
+                    continue
+                    
+                match = re.match(syslog_pattern, line)
+                if match:
+                    timestamp, facility, severity, mnemonic, message = match.groups()
+                    logs.append({
+                        'timestamp': timestamp,
+                        'facility': facility,
+                        'severity': severity,
+                        'mnemonic': mnemonic,
+                        'message': message.strip()
+                    })
+            except Exception as e:
+                print(f"Error parsing log line: {line} - {str(e)}")
+                continue
+        
+        return logs
+
+    @staticmethod
+    def parse_spanning_tree_blocked(output: str) -> List[Dict[str, str]]:
+        """Parse 'show spanning-tree blockedports' output"""
+        blocked_ports = []
+        current_vlan = None
+        
+        for line in output.splitlines():
+            try:
+                if not line.strip() or 'Name' in line or '----' in line:
+                    continue
+                    
+                if line.startswith('VLAN'):
+                    current_vlan = line.split()[1]
+                elif current_vlan and 'BLK' in line:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        blocked_ports.append({
+                            'interface': parts[0],
+                            'vlan': current_vlan,
+                            'status': 'blocking',
+                            'cost': parts[3],
+                            'priority': parts[4]
+                        })
+            except Exception as e:
+                print(f"Error parsing blocked port line: {line} - {str(e)}")
+                continue
+        
+        return blocked_ports
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -479,13 +823,13 @@ COMMON_COMMANDS = {
     },
     "Show Environment": {
         "command": "show environment all",
-        "parser": None,  # Add parser if needed
-        "headers": ["sensor", "status", "value"]
+        "parser": CommandParser.parse_environment,
+        "headers": ["section", "sensor", "value", "status"]
     },
     "Show Logging": {
         "command": "show logging",
-        "parser": None,  # Add parser if needed
-        "headers": ["timestamp", "facility", "severity", "message"]
+        "parser": CommandParser.parse_logging,
+        "headers": ["timestamp", "facility", "severity", "mnemonic", "message"]
     },
     "Show Tech-Support": {
         "command": "show tech-support",
@@ -521,6 +865,46 @@ COMMON_COMMANDS = {
         "command": "show port-security",
         "parser": CommandParser.parse_port_security,
         "headers": ["interface", "max_addr", "current_addr", "security_violation", "action"]
+    },
+    "Show Interface Transceiver": {
+        "command": "show interface transceiver",
+        "parser": CommandParser.parse_interface_transceiver,
+        "headers": ["interface", "parameter", "value", "status"]
+    },
+    "Show Power Inline": {
+        "command": "show power inline",
+        "parser": CommandParser.parse_power_inline,
+        "headers": ["interface", "admin", "oper", "power_draw", "device", "class"]
+    },
+    "Show Interface Counters Errors": {
+        "command": "show interface counters errors",
+        "parser": CommandParser.parse_interface_counters_errors,
+        "headers": ["interface", "align_errors", "fcs_errors", "xmit_errors", "rcv_errors", "undersize", "oversize"]
+    },
+    "Show Interface Storm-Control": {
+        "command": "show interface storm-control",
+        "parser": CommandParser.parse_interface_storm_control,
+        "headers": ["interface", "broadcast_level", "multicast_level", "unicast_level"]
+    },
+    "Show Authentication Sessions": {
+        "command": "show authentication sessions",
+        "parser": CommandParser.parse_authentication_sessions,
+        "headers": ["interface", "mac", "method", "domain", "status", "session"]
+    },
+    "Show Port-Security": {
+        "command": "show port-security",
+        "parser": CommandParser.parse_port_security,
+        "headers": ["interface", "max_addr", "current_addr", "security_violation", "action"]
+    },
+    "Show Interface Trunk": {
+        "command": "show interface trunk",
+        "parser": CommandParser.parse_interface_trunk,
+        "headers": ["interface", "mode", "encapsulation", "status", "native_vlan", "allowed_vlans"]
+    },
+    "Show Spanning-Tree Blocked Ports": {
+        "command": "show spanning-tree blockedports",
+        "parser": CommandParser.parse_spanning_tree_blocked,
+        "headers": ["interface", "vlan", "status", "cost", "priority"]
     }
 }
 
