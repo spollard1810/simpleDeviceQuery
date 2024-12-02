@@ -7,6 +7,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
+from classes.command_parser import COMMON_COMMANDS
 
 class DeviceManager:
     def __init__(self):
