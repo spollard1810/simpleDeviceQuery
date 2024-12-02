@@ -160,7 +160,7 @@ class CommandParser:
                 if 'connected' in status.lower():
                     interfaces.append({
                         'interface': interface[:30],  # Limit field lengths
-                        'description': description[:50],
+                        'description': description[:50],  # Include empty description
                         'status': status[:15],
                         'vlan': vlan[:10],
                         'duplex': duplex[:10],
