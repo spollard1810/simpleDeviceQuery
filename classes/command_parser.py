@@ -133,14 +133,15 @@ class CommandParser:
         lines = [line for line in output.splitlines() if line.strip() and 'Port' not in line and '----' not in line]
         
         for line in lines:
-            # Split line while preserving spaces in description
-            # This handles variable-width fields better
             try:
-                # First, handle the fixed-width fields from the end
+                # Split the line into parts
                 parts = line.rstrip().split()
-                if len(parts) < 7:
+                if len(parts) < 6:  # Changed from 7 to 6 since description is optional
                     continue
                     
+                # Handle interface name (always first field)
+                interface = parts[0]
+                
                 # Work backwards from the end for fixed fields
                 type_ = parts[-1]
                 speed = parts[-2]
@@ -148,19 +149,17 @@ class CommandParser:
                 vlan = parts[-4]
                 status = parts[-5]
                 
-                # Handle interface name (always first field)
-                interface = parts[0]
-                
-                # Description might contain spaces, so join remaining parts
-                description = ' '.join(parts[1:-5]).strip()
-                if description == '--':
+                # Everything between interface and status is the description (might be empty)
+                description_parts = parts[1:-5] if len(parts) > 6 else []
+                description = ' '.join(description_parts).strip()
+                if description == '--' or not description:
                     description = ''
                 
                 # Only include if status contains 'connected'
                 if 'connected' in status.lower():
                     interfaces.append({
                         'interface': interface[:30],  # Limit field lengths
-                        'description': description[:50],  # Include empty description
+                        'description': description[:50],
                         'status': status[:15],
                         'vlan': vlan[:10],
                         'duplex': duplex[:10],
@@ -434,7 +433,7 @@ class CommandParser:
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
-        "command": "show interface status | include connected",
+        "command": "show interface status",
         "parser": CommandParser.parse_interface_status_detailed,
         "headers": ["interface", "description", "status", "vlan", "duplex", "speed", "type"]
     },
