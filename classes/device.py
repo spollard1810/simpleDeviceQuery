@@ -30,10 +30,13 @@ class Device:
         r'[Cc]2[0-9]{3}': 'cisco_ios',          # C2960, C2950, etc.
         r'[Cc]3[0-7][0-9]{2}': 'cisco_ios',     # C3750, C3560, etc.
         
-        # Nexus Switches
-        r'[Nn][Xx]-': 'cisco_nxos',             # NX-5000, NX-7000, etc.
-        r'[Nn]\d[Kk]': 'cisco_nxos',            # N5K, N7K, etc.
-        r'[Nn][Xx]\d{4}': 'cisco_nxos',         # NX9400, etc.
+        # Nexus Switches - Enhanced patterns for model IDs
+        r'N[1-9][KK]': 'cisco_nxos',           # N3K, N5K, N7K, N9K
+        r'N[1-9]\d{3,4}': 'cisco_nxos',        # N3064, N9372, N9K-C93180
+        r'N[1-9]K-[CF]': 'cisco_nxos',         # N9K-C, N7K-F
+        r'NX-\d{4}': 'cisco_nxos',             # NX-3000, NX-5000
+        r'N\d[KK]-C\d{4,5}': 'cisco_nxos',     # N9K-C9336, N3K-C3172
+        r'C\d{4}[A-Z]?-\d{2}[A-Z]': 'cisco_nxos',  # C9372PX-E, C93180YC-EX
         
         # ASR Routers
         r'[Aa][Ss][Rr]-?1[0-9]{3}': 'cisco_xe', # ASR1000 series (IOS-XE)
@@ -76,6 +79,9 @@ class Device:
     def detect_model(self, show_version_output: str) -> str:
         """Detect Cisco model from show version output"""
         patterns = [
+            r'cisco\s+Nexus\s+(\S+(?:-\S+)*)\s+(?:chassis|switch)',
+            r'Hardware\s+:\s+(?:cisco\s+)?([Nn][Xx]-\S+)',
+            r'[Nn]exus\s+(\d{4}[A-Z]-\S+)',
             r'cisco\s+(\S+(?:-\S+)*)\s+(?:chassis|processor|adaptive security appliance)',
             r'cisco\s+(\S+(?:-\S+)*)\s+(?:Series|Software)',
             r'Hardware:\s+(\S+(?:-\S+)*),',
