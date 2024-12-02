@@ -228,3 +228,22 @@ class DeviceManager:
             f.write(f"Command: {command}\n")
             f.write(f"Output:\n{output}\n")
             f.write(f"{'='*50}\n")
+
+    def export_fex_info(self, hostname: str, fex_data: List[Dict[str, str]]) -> None:
+        """Export FEX information to CSV"""
+        headers = ['hostname', 'fex_id', 'description', 'state', 'model', 'serial']
+        
+        # Add hostname to each row
+        for row in fex_data:
+            row['hostname'] = hostname
+            
+        filename = self._get_output_filename("fex_inventory.csv")
+        filepath = os.path.join('outputs', filename)
+        
+        # Append to existing file or create new one
+        file_exists = os.path.exists(filepath)
+        with open(filepath, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(fex_data)

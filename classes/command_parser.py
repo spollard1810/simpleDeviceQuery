@@ -2,6 +2,12 @@ from typing import Dict, List
 import re
 
 class CommandParser:
+    def __init__(self):
+        self.parsers = {
+            # ... existing parsers ...
+            'show fex': self.parse_show_fex,
+        }
+
     @staticmethod
     def parse_interface_status(output: str) -> List[Dict[str, str]]:
         """Parse 'show interface | include connected' output"""
@@ -774,6 +780,48 @@ class CommandParser:
         
         return blocked_ports
 
+    @staticmethod
+    def parse_show_fex(output: str) -> List[Dict[str, str]]:
+        """Parse 'show fex' output from Nexus switches
+        
+        Example output:
+        FEX         Description                       State       Model            Serial
+        --------------------------------------------------------------------------------
+        101         FEX0101                           Online      N2K-C2248TP-E   SSI1234567
+        102         FEX0102                           Online      N2K-C2248TP-1E  SSI7654321
+        """
+        fex_list = []
+        
+        # Skip if empty output or error
+        if not output or "Invalid command" in output:
+            return fex_list
+        
+        lines = output.splitlines()
+        header_found = False
+        
+        for line in lines:
+            # Look for the header line
+            if "FEX" in line and "Description" in line and "State" in line:
+                header_found = True
+                continue
+            # Skip separator line
+            if header_found and "-----------------" in line:
+                continue
+            # Parse FEX entries
+            if header_found and line.strip():
+                # Split line and handle variable spacing
+                parts = [part for part in line.split() if part]
+                if len(parts) >= 5:
+                    fex_list.append({
+                        'fex_id': parts[0],
+                        'description': parts[1],
+                        'state': parts[2],
+                        'model': parts[3],
+                        'serial': parts[4]
+                    })
+        
+        return fex_list
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -905,6 +953,11 @@ COMMON_COMMANDS = {
         "command": "show spanning-tree blockedports",
         "parser": CommandParser.parse_spanning_tree_blocked,
         "headers": ["interface", "vlan", "status", "cost", "priority"]
+    },
+    "Show FEX": {
+        "command": "show fex",
+        "parser": CommandParser.parse_show_fex,
+        "headers": ["fex_id", "description", "state", "model", "serial"]
     }
 }
 
