@@ -7,6 +7,7 @@ import threading
 from classes.command_parser import COMMON_COMMANDS
 from gui.progress_dialog import ProgressDialog
 from gui.loading_dialog import LoadingDialog
+from gui.device_details_window import DeviceDetailsWindow
 
 class CredentialsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -63,6 +64,9 @@ class MainWindow:
         self.device_list.heading("Model", text="Model")
         self.device_list.heading("Status", text="Status")
         self.device_list.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Add double-click binding to device list
+        self.device_list.bind('<Double-1>', self.on_device_double_click)
 
         # Command frame
         command_frame = ttk.Frame(self.root)
@@ -326,3 +330,19 @@ class MainWindow:
             thread.start()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to start command execution: {str(e)}")
+
+    def on_device_double_click(self, event):
+        """Handle double-click on device in list"""
+        selected_items = self.device_list.selection()
+        if not selected_items:
+            return
+            
+        item = selected_items[0]
+        hostname = self.device_list.item(item)["text"]
+        device = self.device_manager.devices.get(hostname)
+        
+        if device:
+            # Get all command outputs for this device
+            command_outputs = self.device_manager.get_device_outputs(hostname)
+            # Show device details window
+            DeviceDetailsWindow(self.root, device, command_outputs)

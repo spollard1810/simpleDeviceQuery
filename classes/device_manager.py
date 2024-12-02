@@ -1,11 +1,12 @@
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Any
 from .device import Device
 import csv
 import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+import json
 
 class DeviceManager:
     def __init__(self):
@@ -228,3 +229,22 @@ class DeviceManager:
             f.write(f"Command: {command}\n")
             f.write(f"Output:\n{output}\n")
             f.write(f"{'='*50}\n")
+
+    def get_device_outputs(self, hostname: str) -> Dict[str, Any]:
+        """Get all command outputs for a device"""
+        outputs = {}
+        device_dir = os.path.join(self.output_dir, hostname)
+        
+        if not os.path.exists(device_dir):
+            return outputs
+        
+        for command_name in COMMON_COMMANDS:
+            command_file = os.path.join(device_dir, f"{command_name}.json")
+            if os.path.exists(command_file):
+                try:
+                    with open(command_file, 'r') as f:
+                        outputs[command_name] = json.load(f)
+                except Exception as e:
+                    print(f"Error loading output for {command_name}: {str(e)}")
+                
+        return outputs
