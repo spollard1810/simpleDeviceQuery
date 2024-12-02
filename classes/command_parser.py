@@ -778,22 +778,22 @@ class CommandParser:
     def parse_fex(output: str) -> List[Dict[str, str]]:
         """Parse 'show fex' output"""
         fexes = []
+        current_fex = {}
         
         for line in output.splitlines():
             try:
                 # Skip headers and empty lines
-                if not line.strip() or 'Number' in line or '----' in line:
+                if not line.strip() or any(header in line for header in ['Number', 'Description', '----']):
                     continue
                 
                 parts = line.split()
-                if len(parts) >= 6:
+                if len(parts) >= 5:
                     fexes.append({
-                        'fex_number': parts[0],
+                        'number': parts[0],
                         'description': parts[1],
                         'state': parts[2],
                         'model': parts[3],
-                        'serial': parts[4],
-                        'ports': parts[5]
+                        'serial': parts[4]
                     })
             except Exception as e:
                 print(f"Error parsing FEX line: {line} - {str(e)}")
