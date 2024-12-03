@@ -843,6 +843,37 @@ class CommandParser:
         
         return fex_list
 
+    @staticmethod
+    def parse_snmp_groups(output: str) -> List[Dict[str, str]]:
+        """Parse 'show running-config | include snmp-server group' output
+        
+        Example output:
+        snmp-server group GROUP1 v3 priv
+        snmp-server group NETWORK-ADMIN v3 priv
+        snmp-server group readonly v1
+        """
+        groups = []
+        
+        for line in output.splitlines():
+            if not line.strip() or not line.startswith('snmp-server group'):
+                continue
+                
+            try:
+                # Split the line into parts
+                parts = line.split()
+                if len(parts) >= 4:  # snmp-server group NAME VERSION [SECURITY]
+                    group = {
+                        'group_name': parts[2],
+                        'version': parts[3],
+                        'security_level': parts[4] if len(parts) > 4 else 'none'
+                    }
+                    groups.append(group)
+            except Exception as e:
+                print(f"Error parsing SNMP group line: {line} - {str(e)}")
+                continue
+                
+        return groups
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -979,6 +1010,11 @@ COMMON_COMMANDS = {
         "command": "show fex",
         "parser": CommandParser.parse_show_fex,
         "headers": ["number", "description", "state", "model", "serial"]
+    },
+    "Show SNMP Groups": {
+        "command": "show running-config | include snmp-server group",
+        "parser": CommandParser.parse_snmp_groups,
+        "headers": ["group_name", "version", "security_level"]
     }
 }
 
