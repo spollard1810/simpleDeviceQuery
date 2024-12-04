@@ -63,18 +63,17 @@ class MainWindow:
         command_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Left side: Regular commands
-        left_frame = ttk.LabelFrame(command_frame, text="Regular Commands")
-        left_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.left_frame = ttk.LabelFrame(command_frame, text="Regular Commands")
+        self.left_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
 
-        # Add "Custom Command" to the list of regular commands
+        # Regular command dropdown
         command_choices = [cmd for cmd in COMMON_COMMANDS.keys() 
                          if not isinstance(COMMON_COMMANDS[cmd]["command"], list)]
         command_choices.append("Custom Command")
         
-        # Regular command dropdown
         self.command_var = tk.StringVar()
         self.command_dropdown = ttk.Combobox(
-            left_frame, 
+            self.left_frame, 
             textvariable=self.command_var,
             values=command_choices,
             state="readonly",
@@ -82,28 +81,29 @@ class MainWindow:
         )
         self.command_dropdown.pack(side=tk.LEFT, padx=5)
         self.command_dropdown.set("Show Interfaces Status")
-        self.command_dropdown.bind('<<ComboboxSelected>>', self.on_command_selected)
+        self.command_dropdown.bind('<<ComboboxSelected>>', self.on_regular_command_selected)
 
         # Custom command entry
-        ttk.Label(left_frame, text="Custom Command:").pack(side=tk.LEFT)
-        self.command_entry = ttk.Entry(left_frame)
+        self.custom_label = ttk.Label(self.left_frame, text="Custom Command:")
+        self.custom_label.pack(side=tk.LEFT)
+        self.command_entry = ttk.Entry(self.left_frame)
         self.command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         self.command_entry.configure(state='disabled')
 
-        ttk.Button(left_frame, text="Execute", command=self.execute_command).pack(side=tk.LEFT, padx=5)
+        self.regular_execute_btn = ttk.Button(self.left_frame, text="Execute", command=self.execute_command)
+        self.regular_execute_btn.pack(side=tk.LEFT, padx=5)
 
         # Right side: Chained commands
-        right_frame = ttk.LabelFrame(command_frame, text="Chained Commands")
-        right_frame.pack(side=tk.RIGHT, padx=5)
+        self.right_frame = ttk.LabelFrame(command_frame, text="Chained Commands")
+        self.right_frame.pack(side=tk.RIGHT, padx=5)
 
-        # Get chained commands (commands with list of commands)
+        # Chained commands dropdown
         chained_commands = [cmd for cmd in COMMON_COMMANDS.keys() 
                           if isinstance(COMMON_COMMANDS[cmd]["command"], list)]
         
-        # Chained commands dropdown
         self.chained_command_var = tk.StringVar()
         self.chained_command_dropdown = ttk.Combobox(
-            right_frame,
+            self.right_frame,
             textvariable=self.chained_command_var,
             values=chained_commands,
             state="readonly",
@@ -112,12 +112,14 @@ class MainWindow:
         self.chained_command_dropdown.pack(side=tk.LEFT, padx=5)
         if chained_commands:
             self.chained_command_dropdown.set(chained_commands[0])
+        self.chained_command_dropdown.bind('<<ComboboxSelected>>', self.on_chained_command_selected)
 
-        ttk.Button(
-            right_frame,
+        self.chain_execute_btn = ttk.Button(
+            self.right_frame,
             text="Execute Chain",
             command=self.execute_chained_command
-        ).pack(side=tk.LEFT, padx=5)
+        )
+        self.chain_execute_btn.pack(side=tk.LEFT, padx=5)
 
         # Device list
         self.device_list = ttk.Treeview(self.root, columns=("IP", "Model", "Status"))
@@ -234,14 +236,32 @@ class MainWindow:
         thread = threading.Thread(target=connect_thread)
         thread.start()
 
-    def on_command_selected(self, event=None):
-        """Handle command selection change"""
+    def on_regular_command_selected(self, event=None):
+        """Handle regular command selection"""
+        # Disable chained commands section
+        self.chained_command_dropdown.configure(state='disabled')
+        self.chain_execute_btn.configure(state='disabled')
+        
+        # Enable regular commands section
+        self.command_dropdown.configure(state='readonly')
+        self.regular_execute_btn.configure(state='normal')
+        
+        # Handle custom command entry
         if self.command_var.get() == "Custom Command":
             self.command_entry.configure(state='normal')
-            self.command_entry.focus()
         else:
             self.command_entry.configure(state='disabled')
-            self.command_entry.delete(0, tk.END)
+
+    def on_chained_command_selected(self, event=None):
+        """Handle chained command selection"""
+        # Disable regular commands section
+        self.command_dropdown.configure(state='disabled')
+        self.command_entry.configure(state='disabled')
+        self.regular_execute_btn.configure(state='disabled')
+        
+        # Enable chained commands section
+        self.chained_command_dropdown.configure(state='readonly')
+        self.chain_execute_btn.configure(state='normal')
 
     def execute_command(self):
         try:
