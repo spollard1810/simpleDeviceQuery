@@ -4,3 +4,4 @@ tkinter
 asyncio
 typing
 dataclasses 
+yaml

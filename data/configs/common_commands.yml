@@ -17,7 +17,7 @@ show_cdp_neighbors:
   parser: "parse_cdp_neighbors"
   headers:
     - device_id
-    - ip_address
-    - platform
     - local_interface
-    - remote_interface 
+    - remote_interface
+    - platform
+    - ip_address 

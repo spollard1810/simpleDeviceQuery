@@ -335,7 +335,6 @@ class MainWindow:
             self.root.wait_window(dialog)
             
             if dialog.result:
-                # Execute chained command
                 attr = dialog.result['attribute']
                 second_command = dialog.result['command']
                 chainable_cmd = CHAINABLE_COMMANDS[second_command]
