@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Dict, List
 from classes.command_parser import CHAINABLE_COMMANDS
+from classes.command_parser import CommandParser
 
 class ChainDialog(tk.Toplevel):
     def __init__(self, parent, first_command_output: List[Dict]):
