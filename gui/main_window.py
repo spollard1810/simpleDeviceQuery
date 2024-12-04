@@ -235,6 +235,9 @@ class MainWindow:
     def execute_command(self):
         try:
             selected_command = self.command_var.get()
+            if not selected_command:
+                messagebox.showwarning("Warning", "Please select a command")
+                return
             
             # Get command info
             if selected_command == "Custom Command":
@@ -250,19 +253,33 @@ class MainWindow:
                 parser = command_info.get("parser")
                 headers = command_info.get("headers", ["hostname", "command", "output"])
 
+            # Check if any devices are selected
+            selected_devices = self.device_manager.get_selected_devices()
+            if not selected_devices:
+                messagebox.showwarning("Warning", "No devices selected")
+                return
+
             # Execute commands and handle results
             results = self.connection_manager.execute_command_on_devices(
-                self.device_manager.get_selected_devices(), 
+                selected_devices, 
                 command
             )
 
+            # Track if we successfully processed any results
+            success_count = 0
+
             for hostname, output in results.items():
                 if output.startswith("Error") or output.startswith("Skipped"):
+                    print(f"Failed for {hostname}: {output}")
                     continue
                     
                 try:
-                    # For multi-command outputs, the parser will handle splitting and combining
-                    parsed_data = parser(output) if parser else [{"output": output}]
+                    if parser:
+                        parsed_data = parser(output)
+                        if not isinstance(parsed_data, list):
+                            parsed_data = [parsed_data]
+                    else:
+                        parsed_data = [{"output": output}]
                     
                     # Only export if we got valid parsed data
                     if parsed_data:
@@ -272,11 +289,19 @@ class MainWindow:
                             parsed_data,
                             headers
                         )
+                        success_count += 1
                 except Exception as e:
                     print(f"Error parsing output for {hostname}: {str(e)}")
 
+            # Show result message
+            if success_count > 0:
+                messagebox.showinfo("Success", f"Command executed successfully on {success_count} device(s)")
+            else:
+                messagebox.showwarning("Warning", "Command execution failed on all devices")
+
         except Exception as e:
             messagebox.showerror("Error", f"Command execution failed: {str(e)}")
+            print(f"Error details: {str(e)}")
 
     def start_command_chain(self):
         """Start the command chaining process"""
