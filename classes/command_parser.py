@@ -908,20 +908,20 @@ class CommandParser:
         - show interfaces
         """
         ap_ports = []
-        current_interface = None
-        current_data = {}
         
         # First find all AP ports from CDP output
-        ap_interfaces = {}  # Store interface -> AP name mapping
+        ap_interfaces = []  # List to store AP interface details
         current_ap = {}
         
         # Parse CDP output to find APs
         for line in cdp_output.splitlines():
             if "Device ID:" in line:
+                # Save previous AP if it was an AP
                 if current_ap and 'interface' in current_ap:
                     if any(ap_identifier in current_ap.get('platform', '').lower() 
                           for ap_identifier in ['air-', 'ap', 'aironet']):
-                        ap_interfaces[current_ap['interface']] = current_ap['device_id']
+                        ap_interfaces.append(current_ap.copy())
+                # Start new device
                 current_ap = {'device_id': line.split("Device ID:", 1)[1].strip()}
             elif "Platform:" in line:
                 platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:', line)
@@ -936,39 +936,46 @@ class CommandParser:
         if current_ap and 'interface' in current_ap:
             if any(ap_identifier in current_ap.get('platform', '').lower() 
                   for ap_identifier in ['air-', 'ap', 'aironet']):
-                ap_interfaces[current_ap['interface']] = current_ap['device_id']
+                ap_interfaces.append(current_ap.copy())
 
-        # Now parse interface output for actual speeds
-        for line in interface_output.splitlines():
-            if ' is ' in line and 'line protocol is ' in line:
-                if current_interface and current_data and current_interface in ap_interfaces:
-                    ap_ports.append(current_data)
-                current_interface = line.split()[0]
-                current_data = {
-                    'interface': current_interface,
-                    'ap_name': ap_interfaces.get(current_interface, ''),
-                    'speed': 'unknown',
-                    'duplex': 'unknown',
-                    'status': 'down'
-                }
-            elif current_interface:
-                # Look for actual negotiated speed
-                if 'Full-duplex, ' in line or 'Half-duplex, ' in line:
-                    speed_match = re.search(r'duplex,\s+(\d+)(\w+)', line)
-                    duplex_match = re.search(r'(Full|Half)-duplex', line)
-                    if speed_match:
-                        speed = speed_match.group(1)
-                        unit = speed_match.group(2).lower()
-                        if unit.startswith('g'):  # Gigabit
-                            speed = int(speed) * 1000
-                        current_data['speed'] = f"{speed}Mb/s"
-                    if duplex_match:
-                        current_data['duplex'] = duplex_match.group(1).lower()
-                    current_data['status'] = 'up'
-
-        # Don't forget the last interface
-        if current_interface and current_data and current_interface in ap_interfaces:
-            ap_ports.append(current_data)
+        # Now for each AP interface, find its details in the interface output
+        for ap in ap_interfaces:
+            interface_name = ap['interface']
+            interface_data = {
+                'interface': interface_name,
+                'ap_name': ap['device_id'],
+                'speed': 'unknown',
+                'duplex': 'unknown',
+                'status': 'down'
+            }
+            
+            # Find this interface in the interface output
+            in_target_interface = False
+            for line in interface_output.splitlines():
+                if interface_name in line and ' is ' in line and 'line protocol is ' in line:
+                    in_target_interface = True
+                    if 'up' in line.lower():
+                        interface_data['status'] = 'up'
+                    continue
+                
+                if in_target_interface:
+                    if 'Full-duplex, ' in line or 'Half-duplex, ' in line:
+                        speed_match = re.search(r'duplex,\s+(\d+)(\w+)', line)
+                        duplex_match = re.search(r'(Full|Half)-duplex', line)
+                        if speed_match:
+                            speed = speed_match.group(1)
+                            unit = speed_match.group(2).lower()
+                            if unit.startswith('g'):  # Gigabit
+                                speed = int(speed) * 1000
+                            interface_data['speed'] = f"{speed}Mb/s"
+                        if duplex_match:
+                            interface_data['duplex'] = duplex_match.group(1).lower()
+                    
+                    # Move to next interface when we see another interface definition
+                    elif ' is ' in line and 'line protocol is ' in line:
+                        in_target_interface = False
+            
+            ap_ports.append(interface_data)
 
         return ap_ports
 
