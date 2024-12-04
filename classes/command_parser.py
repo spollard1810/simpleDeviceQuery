@@ -899,6 +899,80 @@ class CommandParser:
                 
         return groups
 
+    @staticmethod
+    def parse_ap_interface_speeds(cdp_output: str, interface_output: str) -> List[Dict[str, str]]:
+        """Parse AP interface speeds by combining CDP and interface data
+        
+        Uses output from:
+        - show cdp neighbors detail
+        - show interfaces
+        """
+        ap_ports = []
+        current_interface = None
+        current_speed = None
+        
+        # First find all AP ports from CDP output
+        ap_interfaces = {}  # Store interface -> AP name mapping
+        current_ap = {}
+        
+        # Parse CDP output to find APs
+        for line in cdp_output.splitlines():
+            if "Device ID:" in line:
+                if current_ap and 'interface' in current_ap:
+                    if any(ap_identifier in current_ap.get('platform', '').lower() 
+                          for ap_identifier in ['air-', 'ap', 'aironet']):
+                        ap_interfaces[current_ap['interface']] = current_ap['device_id']
+                current_ap = {'device_id': line.split("Device ID:", 1)[1].strip()}
+            elif "Platform:" in line:
+                platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:', line)
+                if platform_match:
+                    current_ap['platform'] = platform_match.group(1).strip()
+            elif "Interface:" in line:
+                local_match = re.search(r'Interface:\s*([^,]+)', line)
+                if local_match:
+                    current_ap['interface'] = local_match.group(1).strip()
+
+        # Don't forget the last AP
+        if current_ap and 'interface' in current_ap:
+            if any(ap_identifier in current_ap.get('platform', '').lower() 
+                  for ap_identifier in ['air-', 'ap', 'aironet']):
+                ap_interfaces[current_ap['interface']] = current_ap['device_id']
+
+        # Now parse interface output for speeds
+        for line in interface_output.splitlines():
+            if ' is ' in line and 'line protocol is ' in line:
+                current_interface = line.split()[0]
+                current_speed = None
+            elif current_interface and 'BW' in line:
+                speed_match = re.search(r'BW (\d+) \w+bit/sec', line)
+                if speed_match:
+                    current_speed = speed_match.group(1)
+                    # If this is an AP interface, add it to our results
+                    if current_interface in ap_interfaces:
+                        ap_ports.append({
+                            'interface': current_interface,
+                            'ap_name': ap_interfaces[current_interface],
+                            'speed': f"{int(current_speed)/1000}Mbps",
+                            'bandwidth': current_speed
+                        })
+
+        return ap_ports
+
+    def parse_output(self, command_name: str, output: str) -> List[Dict[str, str]]:
+        """Parse command output using registered parser"""
+        if command_name not in COMMON_COMMANDS:
+            raise ValueError(f"No parser registered for command: {command_name}")
+            
+        command_info = COMMON_COMMANDS[command_name]
+        parser = command_info["parser"]
+        
+        if isinstance(command_info["command"], list):
+            # Split combined output back into individual command outputs
+            outputs = output.split("\n===COMMAND_SEPARATOR===\n")
+            return parser(*outputs)
+        
+        return parser(output)
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -1042,6 +1116,11 @@ COMMON_COMMANDS = {
         "command": "show running-config | include snmp-server group",
         "parser": CommandParser.parse_snmp_groups,
         "headers": ["config_line"]
+    },
+    "Show AP Interface Speeds": {
+        "command": ["show cdp neighbors detail", "show interfaces"],  # List of commands needed
+        "parser": CommandParser.parse_ap_interface_speeds,
+        "headers": ["interface", "ap_name", "speed", "bandwidth"]
     }
 }
 

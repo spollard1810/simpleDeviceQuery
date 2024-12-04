@@ -60,6 +60,24 @@ class ConnectionManager:
         """Execute command on multiple devices concurrently"""
         results = {}
         
+        # Handle command lists (for commands that need multiple outputs)
+        if isinstance(command, list):
+            # Execute each command and combine outputs with a separator
+            for device in devices:
+                if device.is_online and device.connection_status:
+                    try:
+                        combined_output = []
+                        for cmd in command:
+                            output = device.execute_command(cmd)
+                            combined_output.append(output)
+                        results[device.hostname] = "\n===COMMAND_SEPARATOR===\n".join(combined_output)
+                    except Exception as e:
+                        results[device.hostname] = f"Error: {str(e)}"
+                else:
+                    status = "Offline" if not device.is_online else "Not Connected"
+                    results[device.hostname] = f"Skipped: Device is {status}"
+            return results
+
         # Filter out offline and disconnected devices
         available_devices = [
             device for device in devices 
