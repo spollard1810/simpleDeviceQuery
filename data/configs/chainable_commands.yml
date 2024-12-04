@@ -1,0 +1,32 @@
+show_interface_details:
+  name: "Show Interface Details"
+  base_command: "show interface"
+  parser: "parse_interface_details"
+  headers:
+    - device
+    - interface
+    - device_id
+    - local_interface
+    - ip_address
+    - platform
+    - status
+    - speed
+    - duplex
+    - description
+  value_prefix: ""
+  description: "Get detailed interface information"
+
+show_cdp_neighbor:
+  name: "Show CDP Neighbor"
+  base_command: "show cdp neighbor"
+  parser: "parse_cdp_neighbor_detail"
+  headers:
+    - device
+    - device_id
+    - local_interface
+    - ip_address
+    - platform
+    - capabilities
+    - port_id
+  value_prefix: "interface "
+  description: "Get CDP information for specific interface" 

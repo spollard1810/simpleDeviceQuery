@@ -1,0 +1,23 @@
+show_interfaces_status:
+  name: "Show Interfaces Status"
+  command: "show interface status"
+  parser: "parse_interface_status"
+  headers:
+    - interface
+    - description
+    - status
+    - vlan
+    - duplex
+    - speed
+    - type
+
+show_cdp_neighbors:
+  name: "Show CDP Neighbors"
+  command: "show cdp neighbors detail"
+  parser: "parse_cdp_neighbors"
+  headers:
+    - device_id
+    - ip_address
+    - platform
+    - local_interface
+    - remote_interface 

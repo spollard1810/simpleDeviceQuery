@@ -1331,21 +1331,23 @@ CHAINABLE_COMMANDS = {
     "Show Interface Details": {
         "base_command": "show interface",
         "parser": CommandParser.parse_interface_details,
-        "headers": ["interface", "status", "speed", "duplex", "description"],
+        "headers": ["device", "interface", "device_id", "local_interface", "ip_address", 
+                   "platform", "status", "speed", "duplex", "description"],
         "value_prefix": "",
         "description": "Get detailed interface information"
     },
     "Show MAC Address": {
         "base_command": "show mac address-table address",
         "parser": CommandParser.parse_mac_details,
-        "headers": ["mac_address", "vlan", "type", "port"],
+        "headers": ["device", "mac_address", "vlan", "type", "port", "interface"],
         "value_prefix": "",
         "description": "Look up specific MAC address"
     },
     "Show CDP Neighbor": {
         "base_command": "show cdp neighbor",
         "parser": CommandParser.parse_cdp_neighbor_detail,
-        "headers": ["device_id", "platform", "capabilities", "port_id"],
+        "headers": ["device", "device_id", "local_interface", "ip_address", 
+                   "platform", "capabilities", "port_id"],
         "value_prefix": "interface ",
         "description": "Get CDP information for specific interface"
     }
