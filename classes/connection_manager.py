@@ -126,4 +126,71 @@ class ConnectionManager:
         """Disconnect all devices"""
         for device in devices:
             if device.connection_status:
-                device.disconnect() 
+                device.disconnect()
+
+    def execute_chained_commands(self, devices: List[Device], 
+                               first_command: str,
+                               first_parser: callable,
+                               second_command_generator: callable,
+                               second_parser: callable,
+                               callback=None) -> List[Dict[str, str]]:
+        """Execute a chain of commands where second command depends on first command's output
+        
+        Args:
+            devices: List of devices to execute on
+            first_command: Initial command to execute
+            first_parser: Parser for first command output
+            second_command_generator: Function that takes first command results and returns next command
+            second_parser: Parser for second command output
+            callback: Optional callback for progress updates
+        
+        Returns:
+            List of combined results from both commands
+        """
+        all_results = []
+        
+        # Step 1: Execute first command on all devices
+        first_results = self.execute_command_on_devices(devices, first_command)
+        
+        # Process each device's results
+        for hostname, output in first_results.items():
+            if output.startswith("Error") or output.startswith("Skipped"):
+                continue
+                
+            try:
+                # Parse first command output
+                first_parsed = first_parser(output)
+                
+                # For each result from first command, generate and execute second command
+                for item in first_parsed:
+                    # Generate second command based on first results
+                    second_command = second_command_generator(item)
+                    
+                    # Execute second command on this device
+                    second_results = self.execute_command_on_devices(
+                        [self.devices[hostname]], 
+                        second_command
+                    )
+                    
+                    if hostname in second_results:
+                        second_output = second_results[hostname]
+                        if not second_output.startswith("Error"):
+                            # Parse second command output
+                            second_parsed = second_parser(second_output)
+                            
+                            # Combine the results
+                            combined_data = {
+                                'device': hostname,
+                                **item,  # Include data from first command
+                                **second_parsed  # Include data from second command
+                            }
+                            all_results.append(combined_data)
+                            
+                            if callback:
+                                callback()
+                                
+            except Exception as e:
+                print(f"Error processing chain for {hostname}: {str(e)}")
+                continue
+                
+        return all_results 

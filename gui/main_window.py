@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from classes.device_manager import DeviceManager
 from classes.connection_manager import ConnectionManager
-from typing import Optional
+from typing import Optional, Dict, List
 import threading
 from classes.command_parser import COMMON_COMMANDS
 from gui.progress_dialog import ProgressDialog
@@ -56,17 +56,13 @@ class MainWindow:
         ttk.Button(button_frame, text="Deselect All", command=self.deselect_all).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Connect", command=self.connect_devices).pack(side=tk.LEFT, padx=5)
 
-        # Device list
-        self.device_list = ttk.Treeview(self.root, columns=("IP", "Model", "Status"))
-        self.device_list.heading("#0", text="Hostname")
-        self.device_list.heading("IP", text="IP")
-        self.device_list.heading("Model", text="Model")
-        self.device_list.heading("Status", text="Status")
-        self.device_list.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
         # Command frame
         command_frame = ttk.Frame(self.root)
         command_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # Left side: Regular commands
+        left_frame = ttk.Frame(command_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Add "Custom Command" to the list of commands
         command_choices = list(COMMON_COMMANDS.keys()) + ["Custom Command"]
@@ -74,23 +70,40 @@ class MainWindow:
         # Command dropdown
         self.command_var = tk.StringVar()
         self.command_dropdown = ttk.Combobox(
-            command_frame, 
+            left_frame, 
             textvariable=self.command_var,
             values=command_choices,
-            state="readonly"  # Make it readonly to prevent custom input
+            state="readonly"
         )
         self.command_dropdown.pack(side=tk.LEFT, padx=5)
-        self.command_dropdown.set("Show Interfaces Status")  # Default selection
+        self.command_dropdown.set("Show Interfaces Status")
         self.command_dropdown.bind('<<ComboboxSelected>>', self.on_command_selected)
 
         # Custom command entry
-        ttk.Label(command_frame, text="Custom Command:").pack(side=tk.LEFT)
-        self.command_entry = ttk.Entry(command_frame)
+        ttk.Label(left_frame, text="Custom Command:").pack(side=tk.LEFT)
+        self.command_entry = ttk.Entry(left_frame)
         self.command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        self.command_entry.configure(state='disabled')  # Initially disabled
+        self.command_entry.configure(state='disabled')
 
-        # Execute button
-        ttk.Button(command_frame, text="Execute", command=self.execute_command).pack(side=tk.LEFT)
+        ttk.Button(left_frame, text="Execute", command=self.execute_command).pack(side=tk.LEFT)
+
+        # Right side: Chained commands
+        right_frame = ttk.Frame(command_frame)
+        right_frame.pack(side=tk.RIGHT)
+
+        ttk.Button(
+            right_frame,
+            text="CDP Interface Details",
+            command=self.get_cdp_interface_details
+        ).pack(side=tk.RIGHT, padx=5)
+
+        # Device list
+        self.device_list = ttk.Treeview(self.root, columns=("IP", "Model", "Status"))
+        self.device_list.heading("#0", text="Hostname")
+        self.device_list.heading("IP", text="IP")
+        self.device_list.heading("Model", text="Model")
+        self.device_list.heading("Status", text="Status")
+        self.device_list.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def load_devices(self):
         filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -253,3 +266,33 @@ class MainWindow:
 
         except Exception as e:
             messagebox.showerror("Error", f"Command execution failed: {str(e)}")
+
+    def get_cdp_interface_details(self):
+        """Get interface details for all CDP neighbors using chained commands"""
+        try:
+            # Define command chain
+            def generate_interface_command(cdp_data: Dict[str, str]) -> str:
+                return f"show interface {cdp_data['interface']}"
+            
+            # Execute chained commands
+            results = self.connection_manager.execute_chained_commands(
+                devices=self.device_manager.get_selected_devices(),
+                first_command="show cdp neighbors detail",
+                first_parser=CommandParser.parse_cdp_neighbors,
+                second_command_generator=generate_interface_command,
+                second_parser=CommandParser.parse_single_interface
+            )
+            
+            # Export results
+            if results:
+                headers = ['device', 'interface', 'neighbor', 'platform', 'speed', 
+                          'duplex', 'status', 'input_rate', 'output_rate']
+                self.device_manager.export_parsed_output(
+                    "CDP_Interfaces",
+                    "CDP Interface Details",
+                    results,
+                    headers
+                )
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to get interface details: {str(e)}")

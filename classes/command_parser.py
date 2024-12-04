@@ -997,6 +997,69 @@ class CommandParser:
             return parser.__func__(output)
         return parser(output)
 
+    @staticmethod
+    def parse_cdp_neighbors(output: str) -> List[Dict[str, str]]:
+        """First pass: Parse CDP output to get list of interfaces and neighbors"""
+        cdp_interfaces = []
+        current_neighbor = {}
+        
+        for line in output.splitlines():
+            if "Device ID:" in line:
+                if current_neighbor and 'interface' in current_neighbor:
+                    cdp_interfaces.append(current_neighbor.copy())
+                current_neighbor = {'device_id': line.split("Device ID:", 1)[1].strip()}
+            elif "Platform:" in line:
+                platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:', line)
+                if platform_match:
+                    current_neighbor['platform'] = platform_match.group(1).strip()
+            elif "Interface:" in line:
+                local_match = re.search(r'Interface:\s*([^,]+)', line)
+                if local_match:
+                    current_neighbor['interface'] = local_match.group(1).strip()
+
+        # Don't forget the last neighbor
+        if current_neighbor and 'interface' in current_neighbor:
+            cdp_interfaces.append(current_neighbor.copy())
+            
+        return cdp_interfaces
+
+    @staticmethod
+    def parse_single_interface(output: str) -> Dict[str, str]:
+        """Parse output of show interface for a single interface"""
+        interface_data = {
+            'speed': 'unknown',
+            'duplex': 'unknown',
+            'status': 'down',
+            'input_rate': '0',
+            'output_rate': '0'
+        }
+        
+        for line in output.splitlines():
+            if ' is ' in line and 'line protocol is ' in line:
+                if 'up' in line.lower():
+                    interface_data['status'] = 'up'
+            elif 'Full-duplex, ' in line or 'Half-duplex, ' in line:
+                speed_match = re.search(r'duplex,\s+(\d+)(\w+)', line)
+                duplex_match = re.search(r'(Full|Half)-duplex', line)
+                if speed_match:
+                    speed = speed_match.group(1)
+                    unit = speed_match.group(2).lower()
+                    if unit.startswith('g'):  # Gigabit
+                        speed = int(speed) * 1000
+                    interface_data['speed'] = f"{speed}Mb/s"
+                if duplex_match:
+                    interface_data['duplex'] = duplex_match.group(1).lower()
+            elif 'input rate' in line:
+                rate_match = re.search(r'(\d+) bits/sec', line)
+                if rate_match:
+                    interface_data['input_rate'] = rate_match.group(1)
+            elif 'output rate' in line:
+                rate_match = re.search(r'(\d+) bits/sec', line)
+                if rate_match:
+                    interface_data['output_rate'] = rate_match.group(1)
+                    
+        return interface_data
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -1145,6 +1208,11 @@ COMMON_COMMANDS = {
         "command": ["show cdp neighbors detail", "show interfaces"],
         "parser": CommandParser.parse_ap_interface_speeds,
         "headers": ["interface", "neighbor", "platform", "speed", "duplex", "status"]
+    },
+    "Get CDP Interfaces": {
+        "command": "show cdp neighbors detail",
+        "parser": CommandParser.parse_cdp_neighbors,
+        "headers": ["interface", "device_id", "platform"]
     }
 }
 
