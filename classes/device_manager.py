@@ -189,6 +189,10 @@ class DeviceManager:
     def export_parsed_output(self, hostname: str, command_name: str, parsed_data: List[Dict[str, str]], 
                            headers: List[str]) -> None:
         """Export parsed command output to a single CSV file for all devices"""
+        # Debug print to see what we're getting
+        print(f"Exporting data for {hostname}, command: {command_name}")
+        print(f"Parsed data: {parsed_data}")
+        
         filename = self._get_output_filename(f"{command_name.lower().replace(' ', '_')}_all_devices.csv")
         
         os.makedirs('outputs', exist_ok=True)
@@ -198,8 +202,8 @@ class DeviceManager:
         for row in parsed_data:
             row['hostname'] = hostname
         
-        # Add hostname as first header
-        all_headers = ['hostname'] + headers
+        # Add hostname as first header if not already present
+        all_headers = ['hostname'] + [h for h in headers if h != 'hostname']
         
         # Append to existing file or create new one
         file_exists = os.path.exists(filepath)
