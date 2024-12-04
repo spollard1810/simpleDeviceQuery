@@ -350,36 +350,71 @@ class CommandParser:
 
     @staticmethod
     def parse_interface_errors(output: str) -> List[Dict[str, str]]:
-        """Parse 'show interfaces | include error|CRC|collision|abort' output"""
+        """Parse 'show interfaces' output for error statistics
+        
+        Example output:
+        GigabitEthernet1/0/1 is up, line protocol is up (connected)
+          Hardware is Gigabit Ethernet, address is 1234.5678.9abc (bia 1234.5678.9abc)
+          MTU 1500 bytes, BW 1000000 Kbit/sec, DLY 10 usec,
+          ...
+          0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored
+          0 output errors, 0 collisions, 0 interface resets
+        """
         interfaces = []
         current_interface = None
         error_data = {}
         
         for line in output.splitlines():
-            if 'line protocol' in line:
+            # New interface section starts
+            if ' is ' in line and 'line protocol is ' in line:
+                # Save previous interface data if it exists
                 if current_interface and error_data:
                     interfaces.append(error_data)
-                current_interface = re.match(r'(\S+) is', line)
-                if current_interface:
-                    error_data = {'interface': current_interface.group(1)}
-            elif current_interface:
-                # Extract error counters
-                crc_errors = re.search(r'(\d+) CRC', line)
-                input_errors = re.search(r'(\d+) input errors', line)
-                output_errors = re.search(r'(\d+) output errors', line)
-                collisions = re.search(r'(\d+) collisions', line)
                 
-                if crc_errors:
-                    error_data['crc_errors'] = crc_errors.group(1)
-                if input_errors:
-                    error_data['input_errors'] = input_errors.group(1)
-                if output_errors:
-                    error_data['output_errors'] = output_errors.group(1)
-                if collisions:
-                    error_data['collisions'] = collisions.group(1)
+                # Start new interface
+                current_interface = line.split()[0]
+                error_data = {
+                    'interface': current_interface,
+                    'input_errors': '0',
+                    'crc_errors': '0',
+                    'frame_errors': '0',
+                    'overrun_errors': '0',
+                    'ignored': '0',
+                    'output_errors': '0',
+                    'collisions': '0',
+                    'interface_resets': '0'
+                }
+            
+            # Parse input errors line
+            elif current_interface and 'input errors' in line.lower():
+                parts = line.strip().split(',')
+                for part in parts:
+                    if 'input errors' in part:
+                        error_data['input_errors'] = part.split()[0]
+                    elif 'CRC' in part:
+                        error_data['crc_errors'] = part.split()[0]
+                    elif 'frame' in part:
+                        error_data['frame_errors'] = part.split()[0]
+                    elif 'overrun' in part:
+                        error_data['overrun_errors'] = part.split()[0]
+                    elif 'ignored' in part:
+                        error_data['ignored'] = part.split()[0]
+            
+            # Parse output errors line
+            elif current_interface and 'output errors' in line.lower():
+                parts = line.strip().split(',')
+                for part in parts:
+                    if 'output errors' in part:
+                        error_data['output_errors'] = part.split()[0]
+                    elif 'collisions' in part:
+                        error_data['collisions'] = part.split()[0]
+                    elif 'interface resets' in part:
+                        error_data['interface_resets'] = part.split()[0]
         
+        # Don't forget to add the last interface
         if current_interface and error_data:
             interfaces.append(error_data)
+        
         return interfaces
 
     @staticmethod
@@ -927,9 +962,11 @@ COMMON_COMMANDS = {
         "headers": ["section", "output"]
     },
     "Show Interface Errors": {
-        "command": "show interfaces | include errors|CRC|collision|abort",
+        "command": "show interfaces",
         "parser": CommandParser.parse_interface_errors,
-        "headers": ["interface", "input_errors", "crc_errors", "output_errors", "collisions"]
+        "headers": ["interface", "input_errors", "crc_errors", "frame_errors", 
+                   "overrun_errors", "ignored", "output_errors", "collisions", 
+                   "interface_resets"]
     },
     "Show Interface Counters": {
         "command": "show interfaces counters",
