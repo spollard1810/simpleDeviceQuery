@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 from classes.device_manager import DeviceManager
 from classes.connection_manager import ConnectionManager
 from classes.command_parser import CommandParser, COMMON_COMMANDS
+from classes.exceptions import CommandError, ConnectionError, ParserError
 from typing import Optional, Dict, List
 import threading
 from gui.progress_dialog import ProgressDialog

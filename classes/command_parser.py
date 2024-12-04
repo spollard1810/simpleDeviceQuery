@@ -1,5 +1,6 @@
 from typing import Dict, List
 import re
+from .exceptions import CommandError, ParserError
 
 class CommandParser:
     def __init__(self):

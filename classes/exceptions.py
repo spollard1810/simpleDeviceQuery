@@ -1,7 +1,11 @@
 class CommandError(Exception):
-    """Raised when a command execution fails"""
+    """Exception raised for command execution errors"""
     pass
 
-class SNMPError(Exception):
-    """Raised when SNMP operations fail"""
+class ConnectionError(Exception):
+    """Exception raised for connection errors"""
+    pass
+
+class ParserError(Exception):
+    """Exception raised for parsing errors"""
     pass 

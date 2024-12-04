@@ -7,6 +7,7 @@ import subprocess
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import socket
+from .exceptions import CommandError, ConnectionError
 
 @dataclass
 class Device:
