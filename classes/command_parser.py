@@ -909,7 +909,7 @@ class CommandParser:
         """
         ap_ports = []
         current_interface = None
-        current_speed = None
+        current_data = {}
         
         # First find all AP ports from CDP output
         ap_interfaces = {}  # Store interface -> AP name mapping
@@ -938,23 +938,37 @@ class CommandParser:
                   for ap_identifier in ['air-', 'ap', 'aironet']):
                 ap_interfaces[current_ap['interface']] = current_ap['device_id']
 
-        # Now parse interface output for speeds
+        # Now parse interface output for actual speeds
         for line in interface_output.splitlines():
             if ' is ' in line and 'line protocol is ' in line:
+                if current_interface and current_data and current_interface in ap_interfaces:
+                    ap_ports.append(current_data)
                 current_interface = line.split()[0]
-                current_speed = None
-            elif current_interface and 'BW' in line:
-                speed_match = re.search(r'BW (\d+) \w+bit/sec', line)
-                if speed_match:
-                    current_speed = speed_match.group(1)
-                    # If this is an AP interface, add it to our results
-                    if current_interface in ap_interfaces:
-                        ap_ports.append({
-                            'interface': current_interface,
-                            'ap_name': ap_interfaces[current_interface],
-                            'speed': f"{int(current_speed)/1000}Mbps",
-                            'bandwidth': current_speed
-                        })
+                current_data = {
+                    'interface': current_interface,
+                    'ap_name': ap_interfaces.get(current_interface, ''),
+                    'speed': 'unknown',
+                    'duplex': 'unknown',
+                    'status': 'down'
+                }
+            elif current_interface:
+                # Look for actual negotiated speed
+                if 'Full-duplex, ' in line or 'Half-duplex, ' in line:
+                    speed_match = re.search(r'duplex,\s+(\d+)(\w+)', line)
+                    duplex_match = re.search(r'(Full|Half)-duplex', line)
+                    if speed_match:
+                        speed = speed_match.group(1)
+                        unit = speed_match.group(2).lower()
+                        if unit.startswith('g'):  # Gigabit
+                            speed = int(speed) * 1000
+                        current_data['speed'] = f"{speed}Mb/s"
+                    if duplex_match:
+                        current_data['duplex'] = duplex_match.group(1).lower()
+                    current_data['status'] = 'up'
+
+        # Don't forget the last interface
+        if current_interface and current_data and current_interface in ap_interfaces:
+            ap_ports.append(current_data)
 
         return ap_ports
 
@@ -969,8 +983,18 @@ class CommandParser:
         if isinstance(command_info["command"], list):
             # Split combined output back into individual command outputs
             outputs = output.split("\n===COMMAND_SEPARATOR===\n")
+            if len(outputs) != len(command_info["command"]):
+                print(f"Warning: Expected {len(command_info['command'])} outputs, got {len(outputs)}")
+                return []
+            
+            # For static methods, we need to call them directly
+            if isinstance(parser, staticmethod):
+                return parser.__func__(*outputs)
             return parser(*outputs)
         
+        # For static methods, we need to call them directly
+        if isinstance(parser, staticmethod):
+            return parser.__func__(output)
         return parser(output)
 
 # Define common commands with their parsers and CSV headers
@@ -1118,9 +1142,9 @@ COMMON_COMMANDS = {
         "headers": ["config_line"]
     },
     "Show AP Interface Speeds": {
-        "command": ["show cdp neighbors detail", "show interfaces"],  # List of commands needed
+        "command": ["show cdp neighbors detail", "show interfaces"],
         "parser": CommandParser.parse_ap_interface_speeds,
-        "headers": ["interface", "ap_name", "speed", "bandwidth"]
+        "headers": ["interface", "ap_name", "speed", "duplex", "status"]
     }
 }
 

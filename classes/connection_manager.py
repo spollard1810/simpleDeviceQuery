@@ -69,8 +69,15 @@ class ConnectionManager:
                         combined_output = []
                         for cmd in command:
                             output = device.execute_command(cmd)
-                            combined_output.append(output)
-                        results[device.hostname] = "\n===COMMAND_SEPARATOR===\n".join(combined_output)
+                            if output:  # Only append if we got output
+                                combined_output.append(output)
+                            else:
+                                print(f"Warning: No output for command '{cmd}' on {device.hostname}")
+                        
+                        if len(combined_output) == len(command):  # Only if we got all outputs
+                            results[device.hostname] = "\n===COMMAND_SEPARATOR===\n".join(combined_output)
+                        else:
+                            results[device.hostname] = f"Error: Missing output for some commands"
                     except Exception as e:
                         results[device.hostname] = f"Error: {str(e)}"
                 else:
