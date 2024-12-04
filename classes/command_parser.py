@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Callable
 import re
 from .exceptions import CommandError, ParserError
 
@@ -1220,3 +1220,29 @@ COMMON_COMMANDS = {
 # Add these constants at the end of the file
 DEFAULT_DEVICE_TYPE = 'cisco_ios'
 REQUIRED_CSV_HEADERS = ['hostname']  # IP address is no longer required 
+
+# Add after COMMON_COMMANDS
+CHAINABLE_COMMANDS = {
+    "Show Interface Details": {
+        "base_command": "show interface",  # Base command that will be appended with value
+        "parser": CommandParser.parse_interface_details,  # Specific parser for interface details
+        "headers": ["interface", "status", "speed", "duplex", "description"],
+        "value_prefix": "",  # How to prefix the value (empty means direct append)
+        "description": "Get detailed interface information"
+    },
+    "Show MAC Address": {
+        "base_command": "show mac address-table address",
+        "parser": CommandParser.parse_mac_details,
+        "headers": ["mac_address", "vlan", "type", "port"],
+        "value_prefix": "",
+        "description": "Look up specific MAC address"
+    },
+    "Show CDP Neighbor": {
+        "base_command": "show cdp neighbor",
+        "parser": CommandParser.parse_cdp_neighbor_detail,
+        "headers": ["device_id", "platform", "capabilities", "port_id"],
+        "value_prefix": "interface ",  # Will add "interface " before the value
+        "description": "Get CDP information for specific interface"
+    }
+    # Add more chainable commands as needed
+}

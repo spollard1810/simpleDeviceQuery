@@ -3,14 +3,13 @@ from tkinter import ttk, messagebox
 from typing import Dict, List
 
 class ChainDialog(tk.Toplevel):
-    def __init__(self, parent, commands: Dict, first_command_output: List[Dict]):
+    def __init__(self, parent, first_command_output: List[Dict]):
         super().__init__(parent)
         self.title("Chain Commands")
-        self.commands = commands
         self.first_output = first_command_output
         self.result = None
         
-        self.geometry("800x600")  # Make dialog larger
+        self.geometry("800x600")
         self.transient(parent)
         self.grab_set()
         
@@ -84,11 +83,18 @@ class ChainDialog(tk.Toplevel):
         self.command_combo = ttk.Combobox(
             cmd_frame,
             textvariable=self.command_var,
-            values=list(self.commands.keys()),
+            values=list(CHAINABLE_COMMANDS.keys()),
             state='readonly',
             width=40
         )
         self.command_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Add command description label
+        self.desc_label = ttk.Label(cmd_frame, text="", wraplength=300)
+        self.desc_label.pack(side=tk.LEFT, padx=5)
+        
+        # Show command description when selected
+        self.command_combo.bind('<<ComboboxSelected>>', self.show_command_description)
         
         # Buttons
         button_frame = ttk.Frame(self)
@@ -121,3 +127,9 @@ class ChainDialog(tk.Toplevel):
             'command': self.command_var.get()
         }
         self.destroy() 
+
+    def show_command_description(self, event=None):
+        """Show the description of the selected command"""
+        selected = self.command_var.get()
+        if selected in CHAINABLE_COMMANDS:
+            self.desc_label.config(text=CHAINABLE_COMMANDS[selected]["description"]) 

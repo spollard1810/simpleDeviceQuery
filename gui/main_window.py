@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from classes.device_manager import DeviceManager
 from classes.connection_manager import ConnectionManager
-from classes.command_parser import CommandParser, COMMON_COMMANDS
+from classes.command_parser import CommandParser, COMMON_COMMANDS, CHAINABLE_COMMANDS
 from classes.exceptions import CommandError, ConnectionError, ParserError
 from typing import Optional, Dict, List
 import threading
@@ -313,13 +313,21 @@ class MainWindow:
                 # Execute chained command
                 attr = dialog.result['attribute']
                 second_command = dialog.result['command']
+                chainable_cmd = CHAINABLE_COMMANDS[second_command]
+                
+                # Build the second command using the chainable command format
+                def generate_second_command(x):
+                    value = x[attr]
+                    if chainable_cmd["value_prefix"]:
+                        value = f"{chainable_cmd['value_prefix']}{value}"
+                    return f"{chainable_cmd['base_command']} {value}"
                 
                 results = self.connection_manager.execute_chained_commands(
                     devices=self.device_manager.get_selected_devices(),
                     first_command=command_info["command"],
                     first_parser=command_info["parser"],
-                    second_command_generator=lambda x: f"{COMMON_COMMANDS[second_command]['command']} {x[attr]}",
-                    second_parser=COMMON_COMMANDS[second_command]["parser"]
+                    second_command_generator=generate_second_command,
+                    second_parser=chainable_cmd["parser"]
                 )
                 
                 if results:
@@ -327,7 +335,7 @@ class MainWindow:
                         f"Chained_{selected_command}_{second_command}",
                         "Chained Command Results",
                         results,
-                        COMMON_COMMANDS[second_command]["headers"]
+                        CHAINABLE_COMMANDS[second_command]["headers"]
                     )
                     messagebox.showinfo("Success", "Chained command results exported")
                     
