@@ -2,9 +2,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from classes.device_manager import DeviceManager
 from classes.connection_manager import ConnectionManager
+from classes.command_parser import CommandParser, COMMON_COMMANDS
 from typing import Optional, Dict, List
 import threading
-from classes.command_parser import COMMON_COMMANDS
 from gui.progress_dialog import ProgressDialog
 from gui.loading_dialog import LoadingDialog
 
@@ -42,6 +42,7 @@ class MainWindow:
         self.root.title("Device Query Maker")
         self.device_manager = DeviceManager()
         self.connection_manager = ConnectionManager()
+        self.command_parser = CommandParser()
         self.credentials: Optional[tuple] = None
         
         self.create_widgets()
@@ -278,9 +279,9 @@ class MainWindow:
             results = self.connection_manager.execute_chained_commands(
                 devices=self.device_manager.get_selected_devices(),
                 first_command="show cdp neighbors detail",
-                first_parser=CommandParser.parse_cdp_neighbors,
+                first_parser=self.command_parser.parse_cdp_neighbors,
                 second_command_generator=generate_interface_command,
-                second_parser=CommandParser.parse_single_interface
+                second_parser=self.command_parser.parse_single_interface
             )
             
             # Export results
@@ -293,6 +294,7 @@ class MainWindow:
                     results,
                     headers
                 )
+                messagebox.showinfo("Success", "CDP interface details have been exported")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to get interface details: {str(e)}")
