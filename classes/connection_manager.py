@@ -134,23 +134,14 @@ class ConnectionManager:
                                second_command_generator: callable,
                                second_parser: callable,
                                callback=None) -> List[Dict[str, str]]:
-        """Execute a chain of commands where second command depends on first command's output
-        
-        Args:
-            devices: List of devices to execute on
-            first_command: Initial command to execute
-            first_parser: Parser for first command output
-            second_command_generator: Function that takes first command results and returns next command
-            second_parser: Parser for second command output
-            callback: Optional callback for progress updates
-        
-        Returns:
-            List of combined results from both commands
-        """
+        """Execute a chain of commands where second command depends on first command's output"""
         all_results = []
         
         # Step 1: Execute first command on all devices
         first_results = self.execute_command_on_devices(devices, first_command)
+        
+        # Create a device lookup dict for quick access
+        device_lookup = {device.hostname: device for device in devices}
         
         # Process each device's results
         for hostname, output in first_results.items():
@@ -161,6 +152,12 @@ class ConnectionManager:
                 # Parse first command output
                 first_parsed = first_parser(output)
                 
+                # Get the device object for this hostname
+                device = device_lookup.get(hostname)
+                if not device:
+                    print(f"Warning: Device {hostname} not found in device list")
+                    continue
+                
                 # For each result from first command, generate and execute second command
                 for item in first_parsed:
                     # Generate second command based on first results
@@ -168,7 +165,7 @@ class ConnectionManager:
                     
                     # Execute second command on this device
                     second_results = self.execute_command_on_devices(
-                        [self.devices[hostname]], 
+                        [device],  # Pass the device object directly
                         second_command
                     )
                     
