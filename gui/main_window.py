@@ -8,6 +8,7 @@ from typing import Optional, Dict, List
 import threading
 from gui.progress_dialog import ProgressDialog
 from gui.loading_dialog import LoadingDialog
+from gui.chain_dialog import ChainDialog
 
 class CredentialsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -318,69 +319,55 @@ class MainWindow:
         except Exception as e:
             messagebox.showerror("Error", f"Command execution failed: {str(e)}")
 
-    def get_cdp_interface_details(self):
-        """Get interface details for all CDP neighbors using chained commands"""
-        try:
-            # Define command chain
-            def generate_interface_command(cdp_data: Dict[str, str]) -> str:
-                return f"show interface {cdp_data['interface']}"
-            
-            # Execute chained commands
-            results = self.connection_manager.execute_chained_commands(
-                devices=self.device_manager.get_selected_devices(),
-                first_command="show cdp neighbors detail",
-                first_parser=self.command_parser.parse_cdp_neighbors,
-                second_command_generator=generate_interface_command,
-                second_parser=self.command_parser.parse_single_interface
-            )
-            
-            # Export results
-            if results:
-                headers = ['device', 'interface', 'neighbor', 'platform', 'speed', 
-                          'duplex', 'status', 'input_rate', 'output_rate']
-                self.device_manager.export_parsed_output(
-                    "CDP_Interfaces",
-                    "CDP Interface Details",
-                    results,
-                    headers
-                )
-                messagebox.showinfo("Success", "CDP interface details have been exported")
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to get interface details: {str(e)}")
-
     def execute_chained_command(self):
         """Execute the selected chained command"""
         try:
-            selected_command = self.command_var.get()
-            if not selected_command:
-                messagebox.showwarning("Warning", "Please select a command")
+            first_command = self.command_var.get()
+            if not first_command:
+                messagebox.showwarning("Warning", "Please select first command")
                 return
 
-            # Get command info from COMMON_COMMANDS
-            command_info = COMMON_COMMANDS[selected_command]
-            
-            # Execute commands and handle results
-            results = self.connection_manager.execute_chained_commands(
-                devices=self.device_manager.get_selected_devices(),
-                first_command=command_info["command"][0],  # First command in list
-                first_parser=command_info["parser"],
-                second_command_generator=lambda x: command_info["command"][1],  # Second command in list
-                second_parser=command_info["parser"]
+            # Execute first command
+            command_info = COMMON_COMMANDS[first_command]
+            first_results = self.connection_manager.execute_command_on_devices(
+                self.device_manager.get_selected_devices(),
+                command_info["command"]
             )
             
-            # Export results if we got any
-            if results:
-                self.device_manager.export_parsed_output(
-                    selected_command.replace(" ", "_"),
-                    selected_command,
-                    results,
-                    command_info["headers"]
-                )
-                messagebox.showinfo("Success", f"{selected_command} results have been exported")
-            else:
-                messagebox.showwarning("Warning", "No results to export")
+            # Parse first results
+            parsed_results = []
+            for hostname, output in first_results.items():
+                if not output.startswith("Error"):
+                    parsed = command_info["parser"](output)
+                    if isinstance(parsed, list):
+                        parsed_results.extend(parsed)
+            
+            # Show chain dialog
+            dialog = ChainDialog(self.root, COMMON_COMMANDS, parsed_results)
+            self.root.wait_window(dialog)
+            
+            if dialog.result:
+                # Execute chained command
+                attr = dialog.result['attribute']
+                second_command = dialog.result['command']
                 
+                results = self.connection_manager.execute_chained_commands(
+                    devices=self.device_manager.get_selected_devices(),
+                    first_command=command_info["command"],
+                    first_parser=command_info["parser"],
+                    second_command_generator=lambda x: f"{COMMON_COMMANDS[second_command]['command']} {x[attr]}",
+                    second_parser=COMMON_COMMANDS[second_command]["parser"]
+                )
+                
+                if results:
+                    self.device_manager.export_parsed_output(
+                        f"Chained_{first_command}_{second_command}",
+                        "Chained Command Results",
+                        results,
+                        COMMON_COMMANDS[second_command]["headers"]
+                    )
+                    messagebox.showinfo("Success", "Chained command results exported")
+                    
         except Exception as e:
             messagebox.showerror("Error", f"Failed to execute chained command: {str(e)}")
-            print(f"Error details: {str(e)}")  # For debugging
+            print(f"Error details: {str(e)}")
