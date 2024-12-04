@@ -63,19 +63,22 @@ class MainWindow:
         command_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Left side: Regular commands
-        left_frame = ttk.Frame(command_frame)
-        left_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        left_frame = ttk.LabelFrame(command_frame, text="Regular Commands")
+        left_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
 
-        # Add "Custom Command" to the list of commands
-        command_choices = list(COMMON_COMMANDS.keys()) + ["Custom Command"]
+        # Add "Custom Command" to the list of regular commands
+        command_choices = [cmd for cmd in COMMON_COMMANDS.keys() 
+                         if not isinstance(COMMON_COMMANDS[cmd]["command"], list)]
+        command_choices.append("Custom Command")
         
-        # Command dropdown
+        # Regular command dropdown
         self.command_var = tk.StringVar()
         self.command_dropdown = ttk.Combobox(
             left_frame, 
             textvariable=self.command_var,
             values=command_choices,
-            state="readonly"
+            state="readonly",
+            width=30
         )
         self.command_dropdown.pack(side=tk.LEFT, padx=5)
         self.command_dropdown.set("Show Interfaces Status")
@@ -87,17 +90,34 @@ class MainWindow:
         self.command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         self.command_entry.configure(state='disabled')
 
-        ttk.Button(left_frame, text="Execute", command=self.execute_command).pack(side=tk.LEFT)
+        ttk.Button(left_frame, text="Execute", command=self.execute_command).pack(side=tk.LEFT, padx=5)
 
         # Right side: Chained commands
-        right_frame = ttk.Frame(command_frame)
-        right_frame.pack(side=tk.RIGHT)
+        right_frame = ttk.LabelFrame(command_frame, text="Chained Commands")
+        right_frame.pack(side=tk.RIGHT, padx=5)
+
+        # Get chained commands (commands with list of commands)
+        chained_commands = [cmd for cmd in COMMON_COMMANDS.keys() 
+                          if isinstance(COMMON_COMMANDS[cmd]["command"], list)]
+        
+        # Chained commands dropdown
+        self.chained_command_var = tk.StringVar()
+        self.chained_command_dropdown = ttk.Combobox(
+            right_frame,
+            textvariable=self.chained_command_var,
+            values=chained_commands,
+            state="readonly",
+            width=30
+        )
+        self.chained_command_dropdown.pack(side=tk.LEFT, padx=5)
+        if chained_commands:
+            self.chained_command_dropdown.set(chained_commands[0])
 
         ttk.Button(
             right_frame,
-            text="CDP Interface Details",
-            command=self.get_cdp_interface_details
-        ).pack(side=tk.RIGHT, padx=5)
+            text="Execute Chain",
+            command=self.execute_chained_command
+        ).pack(side=tk.LEFT, padx=5)
 
         # Device list
         self.device_list = ttk.Treeview(self.root, columns=("IP", "Model", "Status"))
@@ -299,3 +319,10 @@ class MainWindow:
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to get interface details: {str(e)}")
+
+    def execute_chained_command(self):
+        """Execute the selected chained command"""
+        selected_command = self.chained_command_var.get()
+        if selected_command == "CDP Interface Details":
+            self.get_cdp_interface_details()
+        # Add other chained commands here as elif statements
