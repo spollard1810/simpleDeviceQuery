@@ -59,18 +59,21 @@ class MainWindow:
         ttk.Button(button_frame, text="Connect", command=self.connect_devices).pack(side=tk.LEFT, padx=5)
 
         # Command frame
-        command_frame = ttk.Frame(self.root)
+        command_frame = ttk.LabelFrame(self.root, text="Commands")
         command_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Left side for command selection
         command_select_frame = ttk.Frame(command_frame)
-        command_select_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        command_select_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
 
         # Command type selector
-        ttk.Label(command_select_frame, text="Command Type:").pack(side=tk.LEFT, padx=5)
+        type_frame = ttk.Frame(command_select_frame)
+        type_frame.pack(fill=tk.X)
+        
+        ttk.Label(type_frame, text="Command Type:").pack(side=tk.LEFT, padx=5)
         self.command_type_var = tk.StringVar(value="Regular")
         self.command_type = ttk.Combobox(
-            command_select_frame,
+            type_frame,
             textvariable=self.command_type_var,
             values=["Regular", "Chained"],
             state="readonly",
@@ -80,10 +83,13 @@ class MainWindow:
         self.command_type.bind('<<ComboboxSelected>>', self.on_command_type_changed)
 
         # Command selector
-        ttk.Label(command_select_frame, text="Command:").pack(side=tk.LEFT, padx=5)
+        command_frame = ttk.Frame(command_select_frame)
+        command_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(command_frame, text="Command:").pack(side=tk.LEFT, padx=5)
         self.command_var = tk.StringVar()
         self.command_dropdown = ttk.Combobox(
-            command_select_frame,
+            command_frame,
             textvariable=self.command_var,
             state="readonly",
             width=40
@@ -92,22 +98,24 @@ class MainWindow:
         self.command_dropdown.bind('<<ComboboxSelected>>', self.on_command_selected)
 
         # Custom command entry
-        self.custom_label = ttk.Label(command_select_frame, text="Custom Command:")
+        custom_frame = ttk.Frame(command_select_frame)
+        custom_frame.pack(fill=tk.X)
+        
+        self.custom_label = ttk.Label(custom_frame, text="Custom Command:")
         self.custom_label.pack(side=tk.LEFT, padx=5)
-        self.command_entry = ttk.Entry(command_select_frame)
+        self.command_entry = ttk.Entry(custom_frame)
         self.command_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         self.command_entry.configure(state='disabled')
 
-        # Right side for execute button
-        button_frame = ttk.Frame(command_frame)
-        button_frame.pack(side=tk.RIGHT, padx=5)
-
-        # Execute button
+        # Execute button - now in its own frame at the bottom
+        execute_frame = ttk.Frame(command_frame)
+        execute_frame.pack(fill=tk.X, pady=5)
+        
         self.execute_btn = ttk.Button(
-            button_frame, 
-            text="Execute",
+            execute_frame,
+            text="Execute Command",
             command=self.execute_selected_command,
-            width=15  # Make button wider
+            width=20
         )
         self.execute_btn.pack(side=tk.RIGHT, padx=5)
 
