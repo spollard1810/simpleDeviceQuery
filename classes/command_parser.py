@@ -901,49 +901,42 @@ class CommandParser:
 
     @staticmethod
     def parse_ap_interface_speeds(cdp_output: str, interface_output: str) -> List[Dict[str, str]]:
-        """Parse AP interface speeds by combining CDP and interface data
+        """Parse interface speeds for all CDP neighbors
         
         Uses output from:
         - show cdp neighbors detail
         - show interfaces
         """
-        ap_ports = []
+        cdp_ports = []
+        current_neighbor = {}
         
-        # First find all AP ports from CDP output
-        ap_interfaces = []  # List to store AP interface details
-        current_ap = {}
-        
-        # Parse CDP output to find APs
+        # First parse CDP output to get all neighbors and their interfaces
         for line in cdp_output.splitlines():
             if "Device ID:" in line:
-                # Save previous AP if it was an AP
-                if current_ap and 'interface' in current_ap:
-                    if any(ap_identifier in current_ap.get('platform', '').lower() 
-                          for ap_identifier in ['air-', 'ap', 'aironet']):
-                        ap_interfaces.append(current_ap.copy())
-                # Start new device
-                current_ap = {'device_id': line.split("Device ID:", 1)[1].strip()}
+                if current_neighbor and 'interface' in current_neighbor:
+                    cdp_ports.append(current_neighbor.copy())
+                current_neighbor = {'device_id': line.split("Device ID:", 1)[1].strip()}
             elif "Platform:" in line:
                 platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:', line)
                 if platform_match:
-                    current_ap['platform'] = platform_match.group(1).strip()
+                    current_neighbor['platform'] = platform_match.group(1).strip()
             elif "Interface:" in line:
                 local_match = re.search(r'Interface:\s*([^,]+)', line)
                 if local_match:
-                    current_ap['interface'] = local_match.group(1).strip()
+                    current_neighbor['interface'] = local_match.group(1).strip()
 
-        # Don't forget the last AP
-        if current_ap and 'interface' in current_ap:
-            if any(ap_identifier in current_ap.get('platform', '').lower() 
-                  for ap_identifier in ['air-', 'ap', 'aironet']):
-                ap_interfaces.append(current_ap.copy())
+        # Don't forget the last neighbor
+        if current_neighbor and 'interface' in current_neighbor:
+            cdp_ports.append(current_neighbor.copy())
 
-        # Now for each AP interface, find its details in the interface output
-        for ap in ap_interfaces:
-            interface_name = ap['interface']
+        # Now find interface details for each CDP port
+        interface_details = []
+        for neighbor in cdp_ports:
+            interface_name = neighbor['interface']
             interface_data = {
                 'interface': interface_name,
-                'ap_name': ap['device_id'],
+                'neighbor': neighbor['device_id'],
+                'platform': neighbor.get('platform', 'unknown'),
                 'speed': 'unknown',
                 'duplex': 'unknown',
                 'status': 'down'
@@ -975,9 +968,9 @@ class CommandParser:
                     elif ' is ' in line and 'line protocol is ' in line:
                         in_target_interface = False
             
-            ap_ports.append(interface_data)
+            interface_details.append(interface_data)
 
-        return ap_ports
+        return interface_details
 
     def parse_output(self, command_name: str, output: str) -> List[Dict[str, str]]:
         """Parse command output using registered parser"""
@@ -1148,10 +1141,10 @@ COMMON_COMMANDS = {
         "parser": CommandParser.parse_snmp_groups,
         "headers": ["config_line"]
     },
-    "Show AP Interface Speeds": {
+    "Show CDP Interface Speeds": {
         "command": ["show cdp neighbors detail", "show interfaces"],
         "parser": CommandParser.parse_ap_interface_speeds,
-        "headers": ["interface", "ap_name", "speed", "duplex", "status"]
+        "headers": ["interface", "neighbor", "platform", "speed", "duplex", "status"]
     }
 }
 
