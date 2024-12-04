@@ -306,7 +306,7 @@ class MainWindow:
                 return
 
             # Show chain dialog
-            dialog = ChainDialog(self.root, COMMON_COMMANDS, parsed_results)
+            dialog = ChainDialog(self.root, parsed_results)
             self.root.wait_window(dialog)
             
             if dialog.result:
