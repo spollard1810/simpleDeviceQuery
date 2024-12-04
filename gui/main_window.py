@@ -351,7 +351,36 @@ class MainWindow:
 
     def execute_chained_command(self):
         """Execute the selected chained command"""
-        selected_command = self.command_var.get()
-        if selected_command == "CDP Interface Details":
-            self.get_cdp_interface_details()
-        # Add other chained commands here as elif statements
+        try:
+            selected_command = self.command_var.get()
+            if not selected_command:
+                messagebox.showwarning("Warning", "Please select a command")
+                return
+
+            # Get command info from COMMON_COMMANDS
+            command_info = COMMON_COMMANDS[selected_command]
+            
+            # Execute commands and handle results
+            results = self.connection_manager.execute_chained_commands(
+                devices=self.device_manager.get_selected_devices(),
+                first_command=command_info["command"][0],  # First command in list
+                first_parser=command_info["parser"],
+                second_command_generator=lambda x: command_info["command"][1],  # Second command in list
+                second_parser=command_info["parser"]
+            )
+            
+            # Export results if we got any
+            if results:
+                self.device_manager.export_parsed_output(
+                    selected_command.replace(" ", "_"),
+                    selected_command,
+                    results,
+                    command_info["headers"]
+                )
+                messagebox.showinfo("Success", f"{selected_command} results have been exported")
+            else:
+                messagebox.showwarning("Warning", "No results to export")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to execute chained command: {str(e)}")
+            print(f"Error details: {str(e)}")  # For debugging
