@@ -355,11 +355,22 @@ class MainWindow:
                 )
                 
                 if results:
+                    # Create dynamic headers combining both commands
+                    first_command_headers = command_info["headers"]  # Headers from first command
+                    second_command_headers = chainable_cmd["headers"]  # Headers from second command
+                    
+                    # Combine headers while avoiding duplicates
+                    combined_headers = (
+                        ["device"] +  # Always include device
+                        [h for h in first_command_headers if h not in second_command_headers] +
+                        second_command_headers
+                    )
+                    
                     self.device_manager.export_parsed_output(
                         f"Chained_{selected_command}_{second_command}",
                         "Chained Command Results",
                         results,
-                        CHAINABLE_COMMANDS[second_command]["headers"]
+                        combined_headers  # Use combined headers
                     )
                     messagebox.showinfo("Success", "Chained command results exported")
                     
