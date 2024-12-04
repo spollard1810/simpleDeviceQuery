@@ -1061,6 +1061,111 @@ class CommandParser:
                     
         return interface_data
 
+    @staticmethod
+    def parse_interface_details(output: str) -> Dict[str, str]:
+        """Parse detailed interface information
+        
+        Example output:
+        GigabitEthernet1/0/1 is up, line protocol is up (connected)
+          Hardware is Gigabit Ethernet, address is 1234.5678.9abc
+          Description: AP-Connection
+          MTU 1500 bytes, BW 1000000 Kbit/sec, DLY 10 usec
+          Full-duplex, 1000Mb/s, media type is 10/100/1000BaseTX
+        """
+        interface_data = {
+            'interface': '',
+            'status': 'down',
+            'speed': 'unknown',
+            'duplex': 'unknown',
+            'description': ''
+        }
+        
+        for line in output.splitlines():
+            if ' is ' in line and 'line protocol is ' in line:
+                interface_data['interface'] = line.split()[0]
+                if 'up' in line.lower():
+                    interface_data['status'] = 'up'
+            elif 'Description:' in line:
+                interface_data['description'] = line.split('Description:', 1)[1].strip()
+            elif 'duplex' in line.lower():
+                if 'Full-duplex' in line:
+                    interface_data['duplex'] = 'full'
+                elif 'Half-duplex' in line:
+                    interface_data['duplex'] = 'half'
+                    
+                speed_match = re.search(r'(\d+)([MG]b/s)', line)
+                if speed_match:
+                    speed = speed_match.group(1)
+                    unit = speed_match.group(2)
+                    if 'Gb/s' in unit:
+                        speed = int(speed) * 1000
+                    interface_data['speed'] = f"{speed}Mb/s"
+                    
+        return interface_data
+
+    @staticmethod
+    def parse_mac_details(output: str) -> Dict[str, str]:
+        """Parse MAC address table details
+        
+        Example output:
+        Vlan    Mac Address       Type        Ports
+        ----    -----------       --------    -----
+        1       1234.5678.9abc    DYNAMIC     Gi1/0/1
+        """
+        mac_data = {
+            'mac_address': '',
+            'vlan': '',
+            'type': '',
+            'port': ''
+        }
+        
+        for line in output.splitlines():
+            if not line.strip() or 'Mac Address' in line or '----' in line:
+                continue
+                
+            parts = line.split()
+            if len(parts) >= 4:
+                mac_data.update({
+                    'vlan': parts[0],
+                    'mac_address': parts[1],
+                    'type': parts[2].lower(),
+                    'port': parts[3]
+                })
+                break  # Take first matching entry
+                
+        return mac_data
+
+    @staticmethod
+    def parse_cdp_neighbor_detail(output: str) -> Dict[str, str]:
+        """Parse CDP neighbor details for specific interface
+        
+        Example output:
+        Device ID: AP-Floor1
+        Platform: cisco AIR-AP3802I-E-K9, Capabilities: Trans-Bridge Switch
+        Interface: GigabitEthernet1/0/1, Port ID (outgoing port): GigabitEthernet0
+        """
+        neighbor_data = {
+            'device_id': '',
+            'platform': '',
+            'capabilities': '',
+            'port_id': ''
+        }
+        
+        for line in output.splitlines():
+            if 'Device ID:' in line:
+                neighbor_data['device_id'] = line.split('Device ID:', 1)[1].strip()
+            elif 'Platform:' in line:
+                platform_match = re.search(r'Platform:\s+([^,]+),\s*Capabilities:\s*(.+)', line)
+                if platform_match:
+                    neighbor_data['platform'] = platform_match.group(1).strip()
+                    neighbor_data['capabilities'] = platform_match.group(2).strip()
+            elif 'Port ID' in line:
+                port_match = re.search(r'Port ID[^:]*:\s*([^\s]+)', line)
+                if port_match:
+                    neighbor_data['port_id'] = port_match.group(1)
+                    
+        return neighbor_data
+
 # Define common commands with their parsers and CSV headers
 COMMON_COMMANDS = {
     "Show Interfaces Status": {
@@ -1224,10 +1329,10 @@ REQUIRED_CSV_HEADERS = ['hostname']  # IP address is no longer required
 # Add after COMMON_COMMANDS
 CHAINABLE_COMMANDS = {
     "Show Interface Details": {
-        "base_command": "show interface",  # Base command that will be appended with value
-        "parser": CommandParser.parse_interface_details,  # Specific parser for interface details
+        "base_command": "show interface",
+        "parser": CommandParser.parse_interface_details,
         "headers": ["interface", "status", "speed", "duplex", "description"],
-        "value_prefix": "",  # How to prefix the value (empty means direct append)
+        "value_prefix": "",
         "description": "Get detailed interface information"
     },
     "Show MAC Address": {
@@ -1241,8 +1346,7 @@ CHAINABLE_COMMANDS = {
         "base_command": "show cdp neighbor",
         "parser": CommandParser.parse_cdp_neighbor_detail,
         "headers": ["device_id", "platform", "capabilities", "port_id"],
-        "value_prefix": "interface ",  # Will add "interface " before the value
+        "value_prefix": "interface ",
         "description": "Get CDP information for specific interface"
     }
-    # Add more chainable commands as needed
 }
