@@ -9,6 +9,7 @@ import threading
 from gui.progress_dialog import ProgressDialog
 from gui.loading_dialog import LoadingDialog
 from gui.chain_dialog import ChainDialog
+from gui.field_selector_dialog import FieldSelectorDialog
 
 class CredentialsDialog(tk.Toplevel):
     def __init__(self, parent):
@@ -356,23 +357,26 @@ class MainWindow:
                 
                 if results:
                     # Create dynamic headers combining both commands
-                    first_command_headers = command_info["headers"]  # Headers from first command
-                    second_command_headers = chainable_cmd["headers"]  # Headers from second command
-                    
-                    # Combine headers while avoiding duplicates
-                    combined_headers = (
-                        ["device"] +  # Always include device
+                    first_command_headers = command_info["headers"]
+                    second_command_headers = chainable_cmd["headers"]
+                    all_available_fields = (
+                        ["device"] +
                         [h for h in first_command_headers if h not in second_command_headers] +
                         second_command_headers
                     )
                     
-                    self.device_manager.export_parsed_output(
-                        f"Chained_{selected_command}_{second_command}",
-                        "Chained Command Results",
-                        results,
-                        combined_headers  # Use combined headers
-                    )
-                    messagebox.showinfo("Success", "Chained command results exported")
+                    # Show field selector dialog
+                    field_selector = FieldSelectorDialog(self.root, all_available_fields, results)
+                    self.root.wait_window(field_selector)
+                    
+                    if field_selector.selected_fields:  # Only export if fields were selected
+                        self.device_manager.export_parsed_output(
+                            f"Chained_{selected_command}_{second_command}",
+                            "Chained Command Results",
+                            results,
+                            field_selector.selected_fields  # Use selected fields
+                        )
+                        messagebox.showinfo("Success", "Chained command results exported")
                     
         except Exception as e:
             messagebox.showerror("Error", f"Failed to execute chained command: {str(e)}")
