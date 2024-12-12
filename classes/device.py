@@ -18,7 +18,7 @@ class Device:
     _connection = None
     _device_type: Optional[str] = None
     is_online: bool = False
-    PING_TIMEOUT = 1  # 1 second timeout for ping
+    PING_TIMEOUT = 2  # Increase timeout to 2 seconds
     
     DEVICE_TYPE_MAPPING = {
         # Catalyst IOS-XE Switches
@@ -181,30 +181,30 @@ class Device:
             raise
 
     async def async_ping(self) -> bool:
-        """Asynchronous ping with fast timeout"""
+        """Asynchronous ping with improved reliability"""
         try:
             # Get the host to ping (prefer IP if available)
             host = self.ip if self.ip else self.hostname
             
-            # Create a socket connection with timeout
             loop = asyncio.get_event_loop()
-            
-            # Use ThreadPoolExecutor for the blocking socket operation
             with ThreadPoolExecutor() as pool:
+                # First try TCP connection to SSH port (most reliable for network devices)
                 try:
-                    # Try SSH port first
                     result = await loop.run_in_executor(
                         pool,
                         self._check_host_port,
                         host,
-                        22,  # Check SSH port
+                        22,  # SSH port
                         self.PING_TIMEOUT
                     )
                     if result:
                         self.is_online = True
                         return True
-                        
-                    # If SSH fails, try ICMP ping
+                except Exception:
+                    pass  # Silently fail and try ICMP ping
+                
+                # If SSH check fails, try ICMP ping with multiple attempts
+                try:
                     result = await loop.run_in_executor(
                         pool,
                         self._icmp_ping,
@@ -212,16 +212,9 @@ class Device:
                     )
                     self.is_online = result
                     return result
-                    
-                except (socket.timeout, socket.error, ConnectionRefusedError):
-                    # Try ICMP ping as final fallback
-                    result = await loop.run_in_executor(
-                        pool,
-                        self._icmp_ping,
-                        host
-                    )
-                    self.is_online = result
-                    return result
+                except Exception:
+                    self.is_online = False
+                    return False
                     
         except Exception as e:
             print(f"Ping failed for {self.hostname}: {str(e)}")
@@ -236,23 +229,35 @@ class Device:
             return result == 0
 
     def _icmp_ping(self, host: str) -> bool:
-        """Perform ICMP ping with timeout"""
+        """Perform ICMP ping with improved reliability"""
         try:
+            # Increase ping count and adjust parameters
             param = '-n' if platform.system().lower() == 'windows' else '-c'
             timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
-            command = ['ping', param, '3', timeout_param, str(self.PING_TIMEOUT), host]
+            count = 5  # Increase ping count
+            
+            if platform.system().lower() == 'windows':
+                command = ['ping', param, str(count), timeout_param, str(self.PING_TIMEOUT * 1000), host]
+            else:
+                command = ['ping', param, str(count), timeout_param, str(self.PING_TIMEOUT), host]
             
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=self.PING_TIMEOUT * 3 + 0.5  # Add small buffer to subprocess timeout
+                timeout=self.PING_TIMEOUT * count + 1  # Adjust total timeout based on count
             )
             
+            # Check for success patterns in output
             if platform.system().lower() == 'windows':
-                return b'bytes=' in result.stdout or b'bytes from' in result.stdout
+                # Look for successful ping statistics
+                return b'Lost = 0' in result.stdout or b'Lost = 1' in result.stdout or b'Lost = 2' in result.stdout
             else:
-                return b'bytes from' in result.stdout
+                # For Unix-like systems, check received packets
+                received = re.search(rb'(\d+) received', result.stdout)
+                if received:
+                    return int(received.group(1)) > 0
+                return False
             
         except (subprocess.TimeoutExpired, subprocess.SubprocessError):
             return False
